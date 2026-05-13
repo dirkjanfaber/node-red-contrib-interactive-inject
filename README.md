@@ -1,13 +1,13 @@
 # node-red-contrib-interactive-inject
 
-A Node-RED node that renders an interactive slider **directly on the editor canvas** — no dashboard required. Drag the thumb to set a numeric value; release (or click the button) to inject it into your flow.
+A Node-RED node that renders an interactive slider **directly on the editor canvas** — no dashboard required. Drag the thumb or type a value directly to set a number; release (or press Enter, or click the button) to inject it into your flow.
 
 <img src="https://raw.githubusercontent.com/dirkjanfaber/node-red-contrib-interactive-inject/main/docs/screenshot.png" alt="interactive-inject node on the Node-RED canvas" width="382">
 
 ## Features
 
 - Inline `<input type="range">` slider embedded in the node body via SVG `<foreignObject>`
-- Live value display that updates as you drag
+- Editable value display — drag the slider or click the number and type directly; press **Enter** to commit or **Escape** to cancel
 - **Inject on release** — automatically sends `msg.payload` when the slider thumb is released (can be disabled)
 - Left-side inject button for manual triggering, like the built-in Inject node
 - Slider position persisted to `flows.json` — survives deploy and restart
@@ -27,8 +27,8 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 ## Usage
 
 1. Drag the **interactive inject** node from the **common** category onto the canvas.
-2. Drag the slider thumb to your desired value — the number updates live.
-3. The value is injected automatically when you release the thumb (if *Inject on release* is enabled, which is the default).
+2. Drag the slider thumb to your desired value, or click the number display and type a value directly.
+3. The value is injected automatically when you release the thumb or press **Enter** (if *Inject on release* is enabled, which is the default).
 4. Click the button on the left side of the node to inject manually at any time.
 
 ### Output
