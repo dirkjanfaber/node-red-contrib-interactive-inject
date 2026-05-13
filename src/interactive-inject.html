@@ -2,24 +2,112 @@
   (function () {
     "use strict";
 
-    // ── Utility ────────────────────────────────────────────────────────────────
+    var SLIDER_H = 52; // extra height: 18px value display + 4px gap + 24px slider + 6px padding
 
-    function clamp(v, min, max) {
-      return Math.min(Math.max(v, min), max);
+    // ── Canvas slider rendering ────────────────────────────────────────────────
+    // Node-RED 3.x exposes RED.hooks with viewAddNode / viewRedrawNode events.
+    // `el` is the raw SVG <g> DOM element; el.__mainRect__ is the background rect.
+
+    function renderSlider(el, node) {
+      // Extend the node's visible rect to make room for the slider + value row
+      if (el.__mainRect__) {
+        el.__mainRect__.setAttribute("height", (node.h || 30) + SLIDER_H);
+      }
+
+      // Remove any previously injected slider so we start clean each redraw
+      var old = el.querySelector(".nri-fo");
+      if (old) { old.remove(); }
+
+      var nodeW = node.w || 100;
+      var nodeH = node.h || 30;
+
+      // currentValue is a saved default — it survives deploy/restart.
+      var initVal = node.currentValue !== undefined
+        ? node.currentValue
+        : (node.defaultValue !== undefined ? node.defaultValue : 50);
+
+      // foreignObject hosts the HTML content inside SVG
+      var fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+      fo.setAttribute("class", "nri-fo");
+      fo.setAttribute("x", "5");
+      fo.setAttribute("y", String(nodeH + 2));
+      fo.setAttribute("width", String(nodeW - 10));
+      fo.setAttribute("height", String(SLIDER_H - 2));
+
+      // Outer flex column — use createElement so elements are in the HTML namespace
+      var wrap = document.createElement("div");
+      wrap.style.cssText = [
+        "display:flex",
+        "flex-direction:column",
+        "align-items:stretch",
+        "gap:2px",
+        "height:100%",
+        "padding:2px 0",
+        "box-sizing:border-box",
+        "user-select:none",
+        "-webkit-user-select:none",
+      ].join(";");
+
+      // Value display row — prominent, centred number
+      var valueDisplay = document.createElement("div");
+      valueDisplay.textContent = String(initVal);
+      valueDisplay.style.cssText = [
+        "text-align:center",
+        "font-size:13px",
+        "font-weight:600",
+        "font-family:monospace",
+        "line-height:18px",
+        "color:#333",
+        "background:rgba(255,255,255,0.55)",
+        "border-radius:3px",
+      ].join(";");
+
+      // Slider row
+      var slider = document.createElement("input");
+      slider.type = "range";
+      slider.min  = String(node.minValue  !== undefined ? node.minValue  : 0);
+      slider.max  = String(node.maxValue  !== undefined ? node.maxValue  : 100);
+      slider.step = String(node.step      !== undefined ? node.step      : 1);
+      slider.value = String(initVal);
+      slider.style.cssText = "width:100%;cursor:pointer;pointer-events:all;margin:0;";
+
+      slider.addEventListener("input", function () {
+        var v = parseFloat(this.value);
+        valueDisplay.textContent = String(v);
+        // Persist in flows.json so the runtime reads the right value after restart.
+        node.currentValue = v;
+        RED.nodes.dirty(true);
+        $.ajax({
+          url: "interactive-inject/" + node.id + "/value",
+          type: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({ value: v }),
+        });
+      });
+
+      // Fire inject when the thumb is released (change fires once on commit, not on every move)
+      slider.addEventListener("change", function () {
+        if (node.injectOnRelease === false) { return; }
+        $.ajax({
+          url: "interactive-inject/" + node.id + "/inject",
+          type: "POST",
+        });
+      });
+
+      // Prevent canvas drag from stealing pointer events while the slider is active
+      slider.addEventListener("mousedown", function (e) { e.stopPropagation(); });
+      slider.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+
+      wrap.appendChild(valueDisplay);
+      wrap.appendChild(slider);
+      fo.appendChild(wrap);
+      el.appendChild(fo);
     }
 
-    // ── On-canvas rendering ────────────────────────────────────────────────────
-    //
-    // Node-RED calls onrender(node) (via the `oneditprepare` hook on the editor
-    // side and via the d3/SVG layer) but the proper hook for injecting custom
-    // SVG into each node's group is `RED.nodes.registerType` with a `draw`
-    // function in the `options` object (available since NR 3.1).
-    //
-    // We use RED.nodes.registerType's `draw` callback to embed a foreignObject
-    // that hosts the <input type="range"> slider directly on the canvas.
+    // ── Node type registration ─────────────────────────────────────────────────
 
     RED.nodes.registerType("interactive-inject", {
-      category: "input",
+      category: "common",
       color: "#a6bbcf",
       defaults: {
         name:         { value: "" },
@@ -28,6 +116,8 @@
         maxValue:     { value: 100, validate: RED.validators.number() },
         step:         { value: 1,   validate: RED.validators.number() },
         defaultValue: { value: 50,  validate: RED.validators.number() },
+        currentValue:     { value: undefined }, // live slider position, written to flows.json
+        injectOnRelease:  { value: true },
       },
       inputs: 0,
       outputs: 1,
@@ -39,22 +129,23 @@
         return this.name ? "node_label_italic" : "";
       },
 
-      // ── Canvas button (left-side trigger, like the built-in inject node) ────
+      // Left-side canvas button (like the built-in inject node)
       button: {
         onclick: function () {
           var node = this;
+          var displayLabel = node.name || node.label || "interactive inject";
           $.ajax({
             url: "interactive-inject/" + node.id + "/inject",
             type: "POST",
             success: function (resp) {
               RED.notify(
-                node.label() + ": injected " + resp.value,
+                displayLabel + ": injected " + resp.value,
                 { type: "success", timeout: 1500 }
               );
             },
             error: function (jqXHR) {
               RED.notify(
-                node.label() + ": " + (jqXHR.responseText || "error"),
+                displayLabel + ": " + (jqXHR.responseText || "error"),
                 { type: "error", timeout: 3000 }
               );
             },
@@ -62,86 +153,47 @@
         },
       },
 
-      // ── SVG drawing hook ───────────────────────────────────────────────────
-      // draw() is called by Node-RED after the node's SVG group is created.
-      // `this` is the node object; `D3group` is the d3 selection of the <g>.
-      draw: function (D3group) {
-        var node = this;
-        var W = 180; // node body width (px)
-        var H = 42;  // slider area height (px)
-
-        // foreignObject to host the native range input
-        var fo = D3group.append("foreignObject")
-          .attr("x", 5)
-          .attr("y", 30)       // below the node label row
-          .attr("width", W - 10)
-          .attr("height", H);
-
-        var body = fo.append("xhtml:div")
-          .style("display", "flex")
-          .style("align-items", "center")
-          .style("gap", "6px")
-          .style("height", "100%")
-          .style("user-select", "none");
-
-        var slider = body.append("xhtml:input")
-          .attr("type", "range")
-          .attr("min", node.minValue)
-          .attr("max", node.maxValue)
-          .attr("step", node.step)
-          .attr("value", node.currentValue !== undefined ? node.currentValue : node.defaultValue)
-          .style("flex", "1")
-          .style("cursor", "pointer");
-
-        var valueLabel = body.append("xhtml:span")
-          .style("min-width", "32px")
-          .style("font-size", "11px")
-          .style("font-family", "monospace")
-          .style("text-align", "right")
-          .text(slider.node().value);
-
-        slider.on("input", function () {
-          var v = parseFloat(this.value);
-          valueLabel.text(v);
-          // Persist the live value on the node object so the button can send it
-          node.currentValue = v;
-          // Also tell the runtime about the new value without triggering output
-          $.ajax({
-            url: "interactive-inject/" + node.id + "/value",
-            type: "POST",
-            contentType: "application/json",
-            data: JSON.stringify({ value: v }),
-          });
-        });
-
-        // Stop d3 drag from interfering with the slider
-        slider.on("mousedown", function (evt) {
-          if (evt && evt.stopPropagation) evt.stopPropagation();
-        });
-      },
-
-      // ── Edit dialog ────────────────────────────────────────────────────────
       oneditprepare: function () {
         $("#node-input-minValue").val(this.minValue);
         $("#node-input-maxValue").val(this.maxValue);
         $("#node-input-step").val(this.step);
         $("#node-input-defaultValue").val(this.defaultValue);
+        $("#node-input-injectOnRelease").prop("checked", this.injectOnRelease !== false);
       },
 
       oneditsave: function () {
-        this.minValue     = parseFloat($("#node-input-minValue").val());
-        this.maxValue     = parseFloat($("#node-input-maxValue").val());
-        this.step         = parseFloat($("#node-input-step").val());
-        this.defaultValue = parseFloat($("#node-input-defaultValue").val());
-        this.defaultValue = clamp(this.defaultValue, this.minValue, this.maxValue);
-        // Reset live value to new default on save
-        this.currentValue = this.defaultValue;
+        this.minValue        = parseFloat($("#node-input-minValue").val());
+        this.maxValue        = parseFloat($("#node-input-maxValue").val());
+        this.step            = parseFloat($("#node-input-step").val());
+        this.defaultValue    = parseFloat($("#node-input-defaultValue").val());
+        this.defaultValue    = Math.min(
+          Math.max(this.defaultValue, this.minValue),
+          this.maxValue
+        );
+        this.injectOnRelease = $("#node-input-injectOnRelease").is(":checked");
+        // When the user edits the node, reset the live value to the new default.
+        this.currentValue    = this.defaultValue;
       },
     });
+
+    // ── Canvas rendering hooks ─────────────────────────────────────────────────
+    // viewRedrawNode fires for every node on each render pass (after the dirty
+    // check updates the rect); viewAddNode fires once when the <g> is first
+    // inserted. Both provide { node, el } where el is the SVG <g> element.
+
+    function onNodeDraw(evt) {
+      if (evt.node.type === "interactive-inject") {
+        renderSlider(evt.el, evt.node);
+      }
+    }
+
+    RED.hooks.add("viewRedrawNode.interactive-inject", onNodeDraw);
+    RED.hooks.add("viewAddNode.interactive-inject", onNodeDraw);
+
   })();
 </script>
 
-<!-- ── Edit dialog template ─────────────────────────────────────────────── -->
+<!-- ── Edit dialog template ────────────────────────────────────────────────── -->
 <script type="text/html" data-template-name="interactive-inject">
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
@@ -153,29 +205,39 @@
   </div>
   <div class="form-row">
     <label for="node-input-minValue"><i class="fa fa-arrow-left"></i> Min</label>
-    <input type="number" id="node-input-minValue" style="width:80px">
+    <input type="number" id="node-input-minValue" step="any" style="width:80px">
   </div>
   <div class="form-row">
     <label for="node-input-maxValue"><i class="fa fa-arrow-right"></i> Max</label>
-    <input type="number" id="node-input-maxValue" style="width:80px">
+    <input type="number" id="node-input-maxValue" step="any" style="width:80px">
   </div>
   <div class="form-row">
     <label for="node-input-step"><i class="fa fa-th"></i> Step</label>
-    <input type="number" id="node-input-step" style="width:80px">
+    <input type="number" id="node-input-step" step="any" style="width:80px">
   </div>
   <div class="form-row">
     <label for="node-input-defaultValue"><i class="fa fa-sliders"></i> Default</label>
-    <input type="number" id="node-input-defaultValue" style="width:80px">
+    <input type="number" id="node-input-defaultValue" step="any" style="width:80px">
+  </div>
+  <div class="form-row" style="margin-bottom:0">
+    <label for="node-input-injectOnRelease" style="width:auto">
+      <input type="checkbox" id="node-input-injectOnRelease"
+             style="display:inline-block;width:auto;vertical-align:middle;margin-right:8px">
+      Inject on release
+    </label>
   </div>
 </script>
 
-<!-- ── Help panel ──────────────────────────────────────────────────────── -->
+<!-- ── Help panel ─────────────────────────────────────────────────────────── -->
 <script type="text/html" data-help-name="interactive-inject">
   <p>An inject node with an inline slider rendered directly on the Node-RED canvas.</p>
   <h3>Usage</h3>
   <ul>
-    <li>Drag the slider to pick a numeric value.</li>
-    <li>Click the <strong>button</strong> on the left of the node to send <code>msg.payload</code> with the current slider value into the flow.</li>
+    <li>Drag the slider to pick a numeric value — the value updates live.</li>
+    <li>When <em>Inject on release</em> is enabled (default), releasing the slider
+        automatically sends <code>msg.payload</code> into the flow.</li>
+    <li>Click the <strong>button</strong> on the left of the node to send manually
+        at any time, regardless of the setting above.</li>
   </ul>
   <h3>Properties</h3>
   <dl class="message-properties">
@@ -186,11 +248,25 @@
     <dt>Step <span class="property-type">number</span></dt>
     <dd>Increment between values (default 1).</dd>
     <dt>Default <span class="property-type">number</span></dt>
-    <dd>Initial slider value.</dd>
+    <dd>Initial slider value on load.</dd>
+    <dt>Inject on release <span class="property-type">boolean</span></dt>
+    <dd>When enabled, releasing the slider thumb automatically injects the value (default: on).</dd>
   </dl>
   <h3>Output</h3>
   <dl class="message-properties">
     <dt>payload <span class="property-type">number</span></dt>
-    <dd>The current slider value at the moment the button is clicked.</dd>
+    <dd>The current slider value when the button is clicked or the slider is released.</dd>
   </dl>
+  <h3>Wrapping the value in a JSON object</h3>
+  <p>To send <code>{ "/Temperature": 25 }</code> instead of a plain number, add a
+     <strong>Change</strong> node after this one and configure one rule:</p>
+  <ul>
+    <li>Action: <em>Set</em></li>
+    <li>Target: <code>msg.payload</code></li>
+    <li>Type: <em>J: expression</em></li>
+    <li>Value: <code>{"&#47;Temperature": payload}</code></li>
+  </ul>
+  <p>The JSONata expression reads the incoming numeric <code>msg.payload</code> and
+     builds a new object from it. See <strong>Import → Examples →
+     node-red-contrib-interactive-inject</strong> for a ready-made flow.</p>
 </script>

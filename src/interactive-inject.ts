@@ -11,6 +11,7 @@ interface InteractiveInjectConfig extends NodeDef {
   maxValue?: number;
   step?: number;
   defaultValue?: number;
+  currentValue?: number;
 }
 
 interface InteractiveInjectNode extends Node {
@@ -75,8 +76,9 @@ function interactiveInjectModule(RED: NodeAPI): void {
     this.minValue = config.minValue ?? 0;
     this.maxValue = config.maxValue ?? 100;
     this.step = config.step ?? 1;
+    // Prefer the persisted slider position; fall back to the configured default.
     this.currentValue = clamp(
-      config.defaultValue ?? this.minValue,
+      config.currentValue ?? config.defaultValue ?? this.minValue,
       this.minValue,
       this.maxValue
     );

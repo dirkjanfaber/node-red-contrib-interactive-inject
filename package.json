@@ -13,14 +13,24 @@
     "version": ">=3.0.0",
     "nodes": {
       "interactive-inject": "dist/interactive-inject.js"
-    }
+    },
+    "examples": "examples"
   },
   "keywords": [
     "node-red",
     "inject",
     "slider",
-    "interactive"
+    "interactive",
+    "victron"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dirkjanfaber/node-red-contrib-interactive-inject.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dirkjanfaber/node-red-contrib-interactive-inject/issues"
+  },
+  "homepage": "https://github.com/dirkjanfaber/node-red-contrib-interactive-inject#readme",
   "author": "Dirk-Jan Faber",
   "license": "MIT",
   "devDependencies": {

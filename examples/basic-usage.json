@@ -1,0 +1,75 @@
+[
+  {
+    "id": "tab-interactive-inject-example",
+    "type": "tab",
+    "label": "Interactive Inject — Example",
+    "disabled": false,
+    "info": "Demonstrates the interactive-inject node with a Change node that wraps the numeric payload in a JSON key.\n\nMove the slider and release — the value is sent automatically.\nThe Change node turns the number into `{ \"/Temperature\": <value> }`."
+  },
+  {
+    "id": "nri-comment",
+    "type": "comment",
+    "z": "tab-interactive-inject-example",
+    "name": "Drag the slider, then release to inject. The Change node wraps the value in a JSON key.",
+    "info": "",
+    "x": 330,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "nri-slider",
+    "type": "interactive-inject",
+    "z": "tab-interactive-inject-example",
+    "name": "Temperature",
+    "label": "inject",
+    "minValue": 0,
+    "maxValue": 40,
+    "step": 0.5,
+    "defaultValue": 20,
+    "currentValue": 20,
+    "injectOnRelease": true,
+    "x": 160,
+    "y": 160,
+    "wires": [["nri-change"]]
+  },
+  {
+    "id": "nri-change",
+    "type": "change",
+    "z": "tab-interactive-inject-example",
+    "name": "Wrap in key",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "{\"/Temperature\": payload}",
+        "tot": "jsonata"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 360,
+    "y": 160,
+    "wires": [["nri-debug"]]
+  },
+  {
+    "id": "nri-debug",
+    "type": "debug",
+    "z": "tab-interactive-inject-example",
+    "name": "",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 530,
+    "y": 160,
+    "wires": []
+  }
+]
