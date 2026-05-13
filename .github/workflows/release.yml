@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Check package.json version matches tag
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "package.json version ($PKG_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "package.json version matches tag: $PKG_VERSION"
+
+      - name: Check for open release-blocking issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BLOCKERS=$(gh issue list --repo ${{ github.repository }} --label "release-blocker" --state open --json number,title --jq '.[] | "  #\(.number) \(.title)"' 2>/dev/null || echo "")
+          if [ -n "$BLOCKERS" ]; then
+            echo "Open release-blocking issues:" >&2
+            echo "$BLOCKERS" >&2
+            exit 1
+          fi
+          echo "No open release-blocking issues"
+
+      - name: Install and test
+        run: |
+          npm ci
+          npm test
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
