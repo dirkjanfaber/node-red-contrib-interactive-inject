@@ -8,6 +8,14 @@
     // Node-RED 3.x exposes RED.hooks with viewAddNode / viewRedrawNode events.
     // `el` is the raw SVG <g> DOM element; el.__mainRect__ is the background rect.
 
+    // Inject spin-button hide style once into the document
+    if (!document.getElementById("nri-style")) {
+      var nriStyle = document.createElement("style");
+      nriStyle.id = "nri-style";
+      nriStyle.textContent = ".nri-val::-webkit-inner-spin-button,.nri-val::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.nri-val{-moz-appearance:textfield}";
+      document.head.appendChild(nriStyle);
+    }
+
     function renderSlider(el, node) {
       // Extend the node's visible rect to make room for the slider + value row
       if (el.__mainRect__) {
@@ -44,13 +52,13 @@
         "height:100%",
         "padding:2px 0",
         "box-sizing:border-box",
-        "user-select:none",
-        "-webkit-user-select:none",
       ].join(";");
 
-      // Value display row — prominent, centred number
-      var valueDisplay = document.createElement("div");
-      valueDisplay.textContent = String(initVal);
+      // Editable value input — looks like the old display but accepts typed input
+      var valueDisplay = document.createElement("input");
+      valueDisplay.type = "number";
+      valueDisplay.className = "nri-val";
+      valueDisplay.value = String(initVal);
       valueDisplay.style.cssText = [
         "text-align:center",
         "font-size:13px",
@@ -60,6 +68,13 @@
         "color:#333",
         "background:rgba(255,255,255,0.55)",
         "border-radius:3px",
+        "border:none",
+        "width:100%",
+        "box-sizing:border-box",
+        "pointer-events:all",
+        "cursor:text",
+        "outline:none",
+        "padding:0",
       ].join(";");
 
       // Slider row
@@ -69,12 +84,9 @@
       slider.max  = String(node.maxValue  !== undefined ? node.maxValue  : 100);
       slider.step = String(node.step      !== undefined ? node.step      : 1);
       slider.value = String(initVal);
-      slider.style.cssText = "width:100%;cursor:pointer;pointer-events:all;margin:0;";
+      slider.style.cssText = "width:100%;cursor:pointer;pointer-events:all;margin:0;user-select:none;-webkit-user-select:none;";
 
-      slider.addEventListener("input", function () {
-        var v = parseFloat(this.value);
-        valueDisplay.textContent = String(v);
-        // Persist in flows.json so the runtime reads the right value after restart.
+      function persistValue(v) {
         node.currentValue = v;
         RED.nodes.dirty(true);
         $.ajax({
@@ -83,20 +95,58 @@
           contentType: "application/json",
           data: JSON.stringify({ value: v }),
         });
+      }
+
+      function commitTyped() {
+        var v = parseFloat(valueDisplay.value);
+        if (isNaN(v)) { valueDisplay.value = String(node.currentValue); return; }
+        v = Math.min(Math.max(v, parseFloat(slider.min)), parseFloat(slider.max));
+        valueDisplay.value = String(v);
+        slider.value = String(v);
+        persistValue(v);
+      }
+
+      slider.addEventListener("input", function () {
+        var v = parseFloat(this.value);
+        valueDisplay.value = String(v);
+        persistValue(v);
       });
 
       // Fire inject when the thumb is released (change fires once on commit, not on every move)
       slider.addEventListener("change", function () {
         if (node.injectOnRelease === false) { return; }
-        $.ajax({
-          url: "interactive-inject/" + node.id + "/inject",
-          type: "POST",
-        });
+        $.ajax({ url: "interactive-inject/" + node.id + "/inject", type: "POST" });
       });
 
       // Prevent canvas drag from stealing pointer events while the slider is active
       slider.addEventListener("mousedown", function (e) { e.stopPropagation(); });
       slider.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+
+      // Stop all pointer events on the foreignObject itself so Node-RED's canvas
+      // click handler never fires (which would select the node, trigger viewRedrawNode,
+      // and tear down this foreignObject — destroying focus).
+      ["mousedown","mouseup","click","pointerdown","pointerup"].forEach(function (type) {
+        fo.addEventListener(type, function (e) { e.stopPropagation(); });
+      });
+
+      valueDisplay.addEventListener("mousedown", function (e) {
+        e.preventDefault(); // prevent D3 drag from blocking native focus
+        this.focus();
+      });
+      valueDisplay.addEventListener("keydown", function (e) {
+        e.stopPropagation();
+        if (e.key === "Enter") {
+          commitTyped();
+          if (node.injectOnRelease !== false) {
+            $.ajax({ url: "interactive-inject/" + node.id + "/inject", type: "POST" });
+          }
+          this.blur();
+        } else if (e.key === "Escape") {
+          valueDisplay.value = String(node.currentValue);
+          this.blur();
+        }
+      });
+      valueDisplay.addEventListener("blur", commitTyped);
 
       wrap.appendChild(valueDisplay);
       wrap.appendChild(slider);
@@ -234,7 +284,8 @@
   <h3>Usage</h3>
   <ul>
     <li>Drag the slider to pick a numeric value — the value updates live.</li>
-    <li>When <em>Inject on release</em> is enabled (default), releasing the slider
+    <li>Click the value display and type a number directly, then press <strong>Enter</strong> to commit (or <strong>Escape</strong> to cancel).</li>
+    <li>When <em>Inject on release</em> is enabled (default), releasing the slider or pressing Enter
         automatically sends <code>msg.payload</code> into the flow.</li>
     <li>Click the <strong>button</strong> on the left of the node to send manually
         at any time, regardless of the setting above.</li>
