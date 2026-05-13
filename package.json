@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "A Node-RED node that renders an inline slider on the canvas for interactive value injection",
   "main": "dist/interactive-inject.js",
+  "files": [
+    "dist/",
+    "examples/"
+  ],
   "scripts": {
     "build": "tsc && cp src/interactive-inject.html dist/interactive-inject.html",
     "watch": "tsc --watch",
