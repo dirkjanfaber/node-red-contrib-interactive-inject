@@ -37,6 +37,9 @@
   "homepage": "https://github.com/dirkjanfaber/node-red-contrib-interactive-inject#readme",
   "author": "Dirk-Jan Faber",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "devDependencies": {
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.0",
