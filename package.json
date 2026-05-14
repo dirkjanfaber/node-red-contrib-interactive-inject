@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-interactive-inject",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A Node-RED node that renders an inline slider on the canvas for interactive value injection",
   "main": "dist/interactive-inject.js",
   "files": [
