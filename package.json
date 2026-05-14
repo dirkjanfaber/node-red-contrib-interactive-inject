@@ -4,7 +4,8 @@
   "description": "A Node-RED node that renders an inline slider on the canvas for interactive value injection",
   "main": "dist/interactive-inject.js",
   "files": [
-    "dist/",
+    "dist/interactive-inject.js",
+    "dist/interactive-inject.html",
     "examples/"
   ],
   "scripts": {
