@@ -281,34 +281,25 @@
 <!-- ── Help panel ─────────────────────────────────────────────────────────── -->
 <script type="text/html" data-help-name="interactive-inject">
   <p>An inject node with an inline slider rendered directly on the Node-RED canvas.</p>
-  <h3>Usage</h3>
-  <ul>
-    <li>Drag the slider to pick a numeric value — the value updates live.</li>
-    <li>Click the value display and type a number directly, then press <strong>Enter</strong> to commit (or <strong>Escape</strong> to cancel).</li>
-    <li>When <em>Inject on release</em> is enabled (default), releasing the slider or pressing Enter
-        automatically sends <code>msg.payload</code> into the flow.</li>
-    <li>Click the <strong>button</strong> on the left of the node to send manually
-        at any time, regardless of the setting above.</li>
-  </ul>
-  <h3>Properties</h3>
+  <h3>Inputs</h3>
   <dl class="message-properties">
-    <dt>Min <span class="property-type">number</span></dt>
-    <dd>Minimum slider value (default 0).</dd>
-    <dt>Max <span class="property-type">number</span></dt>
-    <dd>Maximum slider value (default 100).</dd>
-    <dt>Step <span class="property-type">number</span></dt>
-    <dd>Increment between values (default 1).</dd>
-    <dt>Default <span class="property-type">number</span></dt>
-    <dd>Initial slider value on load.</dd>
-    <dt>Inject on release <span class="property-type">boolean</span></dt>
-    <dd>When enabled, releasing the slider thumb automatically injects the value (default: on).</dd>
+    <dt class="optional">setValue <span class="property-type">number</span></dt>
+    <dd>Sets the slider position to this value without injecting. Clamped to the configured min/max range.</dd>
+    <dt class="optional">trigger <span class="property-type">boolean</span></dt>
+    <dd>When <code>true</code>, injects the current slider value into the flow.</dd>
   </dl>
-  <h3>Output</h3>
+  <h3>Outputs</h3>
   <dl class="message-properties">
     <dt>payload <span class="property-type">number</span></dt>
     <dd>The current slider value when the button is clicked or the slider is released.</dd>
   </dl>
-  <h3>Wrapping the value in a JSON object</h3>
+  <h3>Details</h3>
+  <p>Drag the slider to pick a numeric value, or click the value display and type a number directly,
+     then press <strong>Enter</strong> to commit (or <strong>Escape</strong> to cancel).</p>
+  <p>When <em>Inject on release</em> is enabled (default), releasing the slider or pressing Enter
+     automatically sends <code>msg.payload</code> into the flow. The button on the left of the
+     node sends the current value manually at any time.</p>
+  <h4>Wrapping the value in a JSON object</h4>
   <p>To send <code>{ "/Temperature": 25 }</code> instead of a plain number, add a
      <strong>Change</strong> node after this one and configure one rule:</p>
   <ul>
