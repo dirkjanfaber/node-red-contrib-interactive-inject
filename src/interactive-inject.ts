@@ -83,14 +83,15 @@ function interactiveInjectModule(RED: NodeAPI): void {
       this.maxValue
     );
 
-    this.on('input', (msg: IncomingMessage, send: (msg: unknown) => void, done: (err?: Error) => void) => {
-      if (msg.setValue !== undefined) {
-        this.currentValue = clamp(msg.setValue, this.minValue, this.maxValue);
+    this.on('input', (msg, send, done) => {
+      const inMsg = msg as IncomingMessage;
+      if (inMsg.setValue !== undefined) {
+        this.currentValue = clamp(inMsg.setValue, this.minValue, this.maxValue);
         done();
         return;
       }
 
-      if (msg.trigger) {
+      if (inMsg.trigger) {
         send({ payload: this.currentValue });
       }
       done();

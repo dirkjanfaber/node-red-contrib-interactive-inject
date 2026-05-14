@@ -7,11 +7,11 @@ module.exports = {
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: {
-        // Relax strict for test files
         strict: true,
         esModuleInterop: true,
         module: 'commonjs',
         target: 'ES2020',
+        types: ['jest', 'node'],
       },
     }],
   },
