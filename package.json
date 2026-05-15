@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-interactive-inject",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "A Node-RED node that renders an inline slider on the canvas for interactive value injection",
   "main": "dist/interactive-inject.js",
   "files": [
@@ -53,6 +53,11 @@
   },
   "peerDependencies": {
     "node-red": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "node-red": {
+      "optional": true
+    }
   },
   "overrides": {
     "typescript": "^6.0.3"
