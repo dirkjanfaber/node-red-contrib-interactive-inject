@@ -6,7 +6,6 @@ import { NodeDef, Node } from '@node-red/registry';
 type NodeAPI = NodeRed.NodeAPI;
 
 interface InteractiveInjectConfig extends NodeDef {
-  label?: string;
   minValue?: number;
   maxValue?: number;
   step?: number;
@@ -19,12 +18,6 @@ interface InteractiveInjectNode extends Node {
   minValue: number;
   maxValue: number;
   step: number;
-}
-
-interface IncomingMessage {
-  trigger?: boolean;
-  setValue?: number;
-  [key: string]: unknown;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -83,19 +76,6 @@ function interactiveInjectModule(RED: NodeAPI): void {
       this.maxValue
     );
 
-    this.on('input', (msg, send, done) => {
-      const inMsg = msg as IncomingMessage;
-      if (inMsg.setValue !== undefined) {
-        this.currentValue = clamp(inMsg.setValue, this.minValue, this.maxValue);
-        done();
-        return;
-      }
-
-      if (inMsg.trigger) {
-        send({ payload: this.currentValue });
-      }
-      done();
-    });
   }
 
   RED.nodes.registerType('interactive-inject', InteractiveInjectNode as never);

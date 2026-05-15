@@ -2,39 +2,36 @@
   (function () {
     "use strict";
 
-    var SLIDER_H = 52; // extra height: 18px value display + 4px gap + 24px slider + 6px padding
+    var SLIDER_H = 56;
 
-    // ── Canvas slider rendering ────────────────────────────────────────────────
-    // Node-RED 3.x exposes RED.hooks with viewAddNode / viewRedrawNode events.
-    // `el` is the raw SVG <g> DOM element; el.__mainRect__ is the background rect.
-
-    // Inject spin-button hide style once into the document
-    if (!document.getElementById("nri-style")) {
-      var nriStyle = document.createElement("style");
-      nriStyle.id = "nri-style";
-      nriStyle.textContent = ".nri-val::-webkit-inner-spin-button,.nri-val::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.nri-val{-moz-appearance:textfield}";
-      document.head.appendChild(nriStyle);
-    }
+    // Always update style content so upgrades are reflected without a hard refresh
+    var nriStyle = document.getElementById("nri-style") || (function () {
+      var el = document.createElement("style");
+      el.id = "nri-style";
+      document.head.appendChild(el);
+      return el;
+    })();
+    nriStyle.textContent = [
+      ".nri-val::-webkit-inner-spin-button,.nri-val::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}",
+      ".nri-val{-moz-appearance:textfield;outline:none}",
+      ".nri-val:focus{outline:2px solid #4aa3df;outline-offset:1px;border-radius:3px}",
+    ].join("");
 
     function renderSlider(el, node) {
-      // Extend the node's visible rect to make room for the slider + value row
       if (el.__mainRect__) {
         el.__mainRect__.setAttribute("height", (node.h || 30) + SLIDER_H);
       }
 
-      // Remove any previously injected slider so we start clean each redraw
       var old = el.querySelector(".nri-fo");
       if (old) { old.remove(); }
 
       var nodeW = node.w || 100;
       var nodeH = node.h || 30;
 
-      // currentValue is a saved default — it survives deploy/restart.
       var initVal = node.currentValue !== undefined
         ? node.currentValue
         : (node.defaultValue !== undefined ? node.defaultValue : 50);
 
-      // foreignObject hosts the HTML content inside SVG
       var fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
       fo.setAttribute("class", "nri-fo");
       fo.setAttribute("x", "5");
@@ -42,59 +39,55 @@
       fo.setAttribute("width", String(nodeW - 10));
       fo.setAttribute("height", String(SLIDER_H - 2));
 
-      // Outer flex column — use createElement so elements are in the HTML namespace
       var wrap = document.createElement("div");
-      wrap.style.cssText = [
-        "display:flex",
-        "flex-direction:column",
-        "align-items:stretch",
-        "gap:2px",
-        "height:100%",
-        "padding:2px 0",
-        "box-sizing:border-box",
-      ].join(";");
+      wrap.style.cssText = "display:flex;flex-direction:column;align-items:stretch;gap:4px;height:100%;padding:2px 0;box-sizing:border-box";
 
-      // Editable value input — looks like the old display but accepts typed input
+      // Editable value input — class handles spin-button removal and :focus ring
       var valueDisplay = document.createElement("input");
       valueDisplay.type = "number";
       valueDisplay.className = "nri-val";
       valueDisplay.value = String(initVal);
       valueDisplay.style.cssText = [
         "text-align:center",
-        "font-size:13px",
+        "font-size:12px",
         "font-weight:600",
         "font-family:monospace",
         "line-height:18px",
-        "color:#333",
-        "background:rgba(255,255,255,0.55)",
+        "color:var(--red-ui-node-label-color,#333)",
+        "background:rgba(0,0,0,0.12)",
         "border-radius:3px",
         "border:none",
         "width:100%",
         "box-sizing:border-box",
         "pointer-events:all",
         "cursor:text",
-        "outline:none",
         "padding:0",
       ].join(";");
 
-      // Slider row
       var slider = document.createElement("input");
       slider.type = "range";
-      slider.min  = String(node.minValue  !== undefined ? node.minValue  : 0);
-      slider.max  = String(node.maxValue  !== undefined ? node.maxValue  : 100);
-      slider.step = String(node.step      !== undefined ? node.step      : 1);
+      slider.min   = String(node.minValue  !== undefined ? node.minValue  : 0);
+      slider.max   = String(node.maxValue  !== undefined ? node.maxValue  : 100);
+      slider.step  = String(node.step      !== undefined ? node.step      : 1);
       slider.value = String(initVal);
-      slider.style.cssText = "width:100%;cursor:pointer;pointer-events:all;margin:0;user-select:none;-webkit-user-select:none;";
+      slider.style.cssText = "width:100%;cursor:pointer;pointer-events:all;margin:0;user-select:none;-webkit-user-select:none";
+      slider.setAttribute("aria-label", "slider value");
+      slider.setAttribute("aria-valuemin", slider.min);
+      slider.setAttribute("aria-valuemax", slider.max);
 
+      var persistTimer;
       function persistValue(v) {
         node.currentValue = v;
         RED.nodes.dirty(true);
-        $.ajax({
-          url: "interactive-inject/" + node.id + "/value",
-          type: "POST",
-          contentType: "application/json",
-          data: JSON.stringify({ value: v }),
-        });
+        clearTimeout(persistTimer);
+        persistTimer = setTimeout(function () {
+          $.ajax({
+            url: "interactive-inject/" + node.id + "/value",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ value: v }),
+          });
+        }, 150);
       }
 
       function commitTyped() {
@@ -122,9 +115,8 @@
       slider.addEventListener("mousedown", function (e) { e.stopPropagation(); });
       slider.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
 
-      // Stop all pointer events on the foreignObject itself so Node-RED's canvas
-      // click handler never fires (which would select the node, trigger viewRedrawNode,
-      // and tear down this foreignObject — destroying focus).
+      // Stop all pointer events on the foreignObject so Node-RED's canvas click handler
+      // never fires (which would select the node and tear down the foreignObject).
       ["mousedown","mouseup","click","pointerdown","pointerup"].forEach(function (type) {
         fo.addEventListener(type, function (e) { e.stopPropagation(); });
       });
@@ -154,32 +146,28 @@
       el.appendChild(fo);
     }
 
-    // ── Node type registration ─────────────────────────────────────────────────
-
     RED.nodes.registerType("interactive-inject", {
       category: "common",
       color: "#a6bbcf",
       defaults: {
-        name:         { value: "" },
-        label:        { value: "inject" },
-        minValue:     { value: 0,   validate: RED.validators.number() },
-        maxValue:     { value: 100, validate: RED.validators.number() },
-        step:         { value: 1,   validate: RED.validators.number() },
-        defaultValue: { value: 50,  validate: RED.validators.number() },
-        currentValue:     { value: undefined }, // live slider position, written to flows.json
-        injectOnRelease:  { value: true },
+        name:            { value: "" },
+        minValue:        { value: 0,   validate: RED.validators.number() },
+        maxValue:        { value: 100, validate: RED.validators.number() },
+        step:            { value: 1,   validate: RED.validators.number() },
+        defaultValue:    { value: 50,  validate: RED.validators.number() },
+        currentValue:    { value: undefined },
+        injectOnRelease: { value: true },
       },
       inputs: 0,
       outputs: 1,
       icon: "inject.svg",
       label: function () {
-        return this.name || this.label || "interactive inject";
+        return this.name || "interactive inject";
       },
       labelStyle: function () {
         return this.name ? "node_label_italic" : "";
       },
 
-      // Left-side canvas button (like the built-in inject node)
       button: {
         onclick: function () {
           var node = this;
@@ -221,15 +209,9 @@
           this.maxValue
         );
         this.injectOnRelease = $("#node-input-injectOnRelease").is(":checked");
-        // When the user edits the node, reset the live value to the new default.
         this.currentValue    = this.defaultValue;
       },
     });
-
-    // ── Canvas rendering hooks ─────────────────────────────────────────────────
-    // viewRedrawNode fires for every node on each render pass (after the dirty
-    // check updates the rect); viewAddNode fires once when the <g> is first
-    // inserted. Both provide { node, el } where el is the SVG <g> element.
 
     function onNodeDraw(evt) {
       if (evt.node.type === "interactive-inject") {
@@ -243,51 +225,38 @@
   })();
 </script>
 
-<!-- ── Edit dialog template ────────────────────────────────────────────────── -->
 <script type="text/html" data-template-name="interactive-inject">
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-input-name" placeholder="Name (optional)">
   </div>
-  <div class="form-row">
-    <label for="node-input-label"><i class="fa fa-i-cursor"></i> Label</label>
-    <input type="text" id="node-input-label" placeholder="inject">
+  <div class="form-row" style="margin-bottom:4px">
+    <label style="color:var(--red-ui-secondary-text-color,#888);font-size:11px;text-transform:uppercase;letter-spacing:.04em">Slider range</label>
   </div>
   <div class="form-row">
-    <label for="node-input-minValue"><i class="fa fa-arrow-left"></i> Min</label>
-    <input type="number" id="node-input-minValue" step="any" style="width:80px">
+    <label for="node-input-minValue"><i class="fa fa-minus"></i> Min</label>
+    <input type="number" id="node-input-minValue" step="any" style="width:120px">
   </div>
   <div class="form-row">
-    <label for="node-input-maxValue"><i class="fa fa-arrow-right"></i> Max</label>
-    <input type="number" id="node-input-maxValue" step="any" style="width:80px">
+    <label for="node-input-maxValue"><i class="fa fa-plus"></i> Max</label>
+    <input type="number" id="node-input-maxValue" step="any" style="width:120px">
   </div>
   <div class="form-row">
-    <label for="node-input-step"><i class="fa fa-th"></i> Step</label>
-    <input type="number" id="node-input-step" step="any" style="width:80px">
+    <label for="node-input-step"><i class="fa fa-arrows-h"></i> Step</label>
+    <input type="number" id="node-input-step" step="any" min="0" style="width:120px">
   </div>
   <div class="form-row">
     <label for="node-input-defaultValue"><i class="fa fa-sliders"></i> Default</label>
-    <input type="number" id="node-input-defaultValue" step="any" style="width:80px">
+    <input type="number" id="node-input-defaultValue" step="any" style="width:120px">
   </div>
-  <div class="form-row" style="margin-bottom:0">
-    <label for="node-input-injectOnRelease" style="width:auto">
-      <input type="checkbox" id="node-input-injectOnRelease"
-             style="display:inline-block;width:auto;vertical-align:middle;margin-right:8px">
-      Inject on release
-    </label>
+  <div class="form-row">
+    <label for="node-input-injectOnRelease"><i class="fa fa-paper-plane-o"></i> Inject on release</label>
+    <input type="checkbox" id="node-input-injectOnRelease" style="width:auto">
   </div>
 </script>
 
-<!-- ── Help panel ─────────────────────────────────────────────────────────── -->
 <script type="text/html" data-help-name="interactive-inject">
   <p>An inject node with an inline slider rendered directly on the Node-RED canvas.</p>
-  <h3>Inputs</h3>
-  <dl class="message-properties">
-    <dt class="optional">setValue <span class="property-type">number</span></dt>
-    <dd>Sets the slider position to this value without injecting. Clamped to the configured min/max range.</dd>
-    <dt class="optional">trigger <span class="property-type">boolean</span></dt>
-    <dd>When <code>true</code>, injects the current slider value into the flow.</dd>
-  </dl>
   <h3>Outputs</h3>
   <dl class="message-properties">
     <dt>payload <span class="property-type">number</span></dt>
@@ -306,7 +275,7 @@
     <li>Action: <em>Set</em></li>
     <li>Target: <code>msg.payload</code></li>
     <li>Type: <em>J: expression</em></li>
-    <li>Value: <code>{"&#47;Temperature": payload}</code></li>
+    <li>Value: <code>{"/Temperature": payload}</code></li>
   </ul>
   <p>The JSONata expression reads the incoming numeric <code>msg.payload</code> and
      builds a new object from it. See <strong>Import → Examples →

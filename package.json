@@ -9,7 +9,7 @@
     "examples/"
   ],
   "scripts": {
-    "build": "tsc && cp src/interactive-inject.html dist/interactive-inject.html",
+    "build": "tsc -p tsconfig.build.json && html-minifier-terser src/interactive-inject.html -o dist/interactive-inject.html --collapse-whitespace --remove-comments --minify-js true",
     "watch": "tsc --watch",
     "test": "jest --forceExit",
     "prepublishOnly": "npm run build"
@@ -45,6 +45,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^25.7.0",
     "@types/node-red": "^1.3.4",
+    "html-minifier-terser": "^7.2.0",
     "jest": "^30.4.2",
     "node-red": "^4.1.10",
     "node-red-node-test-helper": "^0.3.4",

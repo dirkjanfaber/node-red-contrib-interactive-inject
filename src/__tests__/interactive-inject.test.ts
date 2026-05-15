@@ -20,7 +20,7 @@ describe('interactive-inject node', () => {
       expect(n1).toBeDefined();
     });
 
-    it('outputs msg.payload with the configured default value when triggered', async () => {
+    it('initializes currentValue to the configured defaultValue', async () => {
       const flow = [
         {
           id: 'n1',
@@ -36,19 +36,11 @@ describe('interactive-inject node', () => {
       ];
 
       await helper.load(interactiveInjectNode, flow);
-      const n1 = helper.getNode('n1');
-      const n2 = helper.getNode('n2');
-
-      await new Promise<void>((resolve) => {
-        n2.on('input', (msg: { payload: unknown }) => {
-          expect(msg.payload).toBe(42);
-          resolve();
-        });
-        n1.receive({ trigger: true });
-      });
+      const n1 = helper.getNode('n1') as unknown as { currentValue: number };
+      expect(n1.currentValue).toBe(42);
     });
 
-    it('outputs the current value (not default) after the value has been updated', async () => {
+    it('prefers persisted currentValue over defaultValue on startup', async () => {
       const flow = [
         {
           id: 'n1',
@@ -58,28 +50,18 @@ describe('interactive-inject node', () => {
           maxValue: 100,
           step: 1,
           defaultValue: 10,
+          currentValue: 75,
           wires: [['n2']],
         },
         { id: 'n2', type: 'helper' },
       ];
 
       await helper.load(interactiveInjectNode, flow);
-      const n1 = helper.getNode('n1');
-      const n2 = helper.getNode('n2');
-
-      // Simulate the editor updating the current value (e.g. slider moved)
-      n1.receive({ setValue: 75 });
-
-      await new Promise<void>((resolve) => {
-        n2.on('input', (msg: { payload: unknown }) => {
-          expect(msg.payload).toBe(75);
-          resolve();
-        });
-        n1.receive({ trigger: true });
-      });
+      const n1 = helper.getNode('n1') as unknown as { currentValue: number };
+      expect(n1.currentValue).toBe(75);
     });
 
-    it('clamps received setValue to [min, max]', async () => {
+    it('clamps currentValue to [min, max] on startup', async () => {
       const flow = [
         {
           id: 'n1',
@@ -88,28 +70,18 @@ describe('interactive-inject node', () => {
           minValue: 0,
           maxValue: 50,
           step: 1,
-          defaultValue: 25,
+          defaultValue: 999,
           wires: [['n2']],
         },
         { id: 'n2', type: 'helper' },
       ];
 
       await helper.load(interactiveInjectNode, flow);
-      const n1 = helper.getNode('n1');
-      const n2 = helper.getNode('n2');
-
-      n1.receive({ setValue: 999 });
-
-      await new Promise<void>((resolve) => {
-        n2.on('input', (msg: { payload: unknown }) => {
-          expect(msg.payload).toBe(50);
-          resolve();
-        });
-        n1.receive({ trigger: true });
-      });
+      const n1 = helper.getNode('n1') as unknown as { currentValue: number };
+      expect(n1.currentValue).toBe(50);
     });
 
-    it('uses defaultValue when none of min/max/step/defaultValue are configured', async () => {
+    it('uses 0 as currentValue when no config is provided', async () => {
       const flow = [
         {
           id: 'n1',
@@ -121,16 +93,8 @@ describe('interactive-inject node', () => {
       ];
 
       await helper.load(interactiveInjectNode, flow);
-      const n1 = helper.getNode('n1');
-      const n2 = helper.getNode('n2');
-
-      await new Promise<void>((resolve) => {
-        n2.on('input', (msg: { payload: unknown }) => {
-          expect(typeof msg.payload).toBe('number');
-          resolve();
-        });
-        n1.receive({ trigger: true });
-      });
+      const n1 = helper.getNode('n1') as unknown as { currentValue: number };
+      expect(typeof n1.currentValue).toBe('number');
     });
   });
 });
