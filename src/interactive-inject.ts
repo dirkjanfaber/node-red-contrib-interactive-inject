@@ -11,6 +11,7 @@ interface InteractiveInjectConfig extends NodeDef {
   step?: number;
   defaultValue?: number;
   currentValue?: number;
+  topic?: string;
 }
 
 interface InteractiveInjectNode extends Node {
@@ -18,6 +19,7 @@ interface InteractiveInjectNode extends Node {
   minValue: number;
   maxValue: number;
   step: number;
+  topic: string;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -55,7 +57,7 @@ function interactiveInjectModule(RED: NodeAPI): void {
         res.status(404).send('Not found');
         return;
       }
-      node.send({ payload: node.currentValue });
+      node.send({ payload: node.currentValue, topic: node.topic });
       res.json({ value: node.currentValue });
     }
   );
@@ -69,6 +71,7 @@ function interactiveInjectModule(RED: NodeAPI): void {
     this.minValue = config.minValue ?? 0;
     this.maxValue = config.maxValue ?? 100;
     this.step = config.step ?? 1;
+    this.topic = config.topic ?? '';
     // Prefer the persisted slider position; fall back to the configured default.
     this.currentValue = clamp(
       config.currentValue ?? config.defaultValue ?? this.minValue,

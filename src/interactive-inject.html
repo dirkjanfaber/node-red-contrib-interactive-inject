@@ -151,6 +151,7 @@
       color: "#a6bbcf",
       defaults: {
         name:            { value: "" },
+        topic:           { value: "" },
         minValue:        { value: 0,   validate: RED.validators.number() },
         maxValue:        { value: 100, validate: RED.validators.number() },
         step:            { value: 1,   validate: RED.validators.number() },
@@ -192,6 +193,7 @@
       },
 
       oneditprepare: function () {
+        $("#node-input-topic").val(this.topic || "");
         $("#node-input-minValue").val(this.minValue);
         $("#node-input-maxValue").val(this.maxValue);
         $("#node-input-step").val(this.step);
@@ -200,6 +202,7 @@
       },
 
       oneditsave: function () {
+        this.topic           = $("#node-input-topic").val();
         this.minValue        = parseFloat($("#node-input-minValue").val());
         this.maxValue        = parseFloat($("#node-input-maxValue").val());
         this.step            = parseFloat($("#node-input-step").val());
@@ -229,6 +232,10 @@
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-input-name" placeholder="Name (optional)">
+  </div>
+  <div class="form-row">
+    <label for="node-input-topic"><i class="fa fa-tasks"></i> Topic</label>
+    <input type="text" id="node-input-topic" placeholder="msg.topic (optional)">
   </div>
   <div class="form-row" style="margin-bottom:4px">
     <label style="color:var(--red-ui-secondary-text-color,#888);font-size:11px;text-transform:uppercase;letter-spacing:.04em">Slider range</label>
@@ -261,6 +268,8 @@
   <dl class="message-properties">
     <dt>payload <span class="property-type">number</span></dt>
     <dd>The current slider value when the button is clicked or the slider is released.</dd>
+    <dt>topic <span class="property-type">string</span></dt>
+    <dd>The topic configured in the edit panel (empty string if not set).</dd>
   </dl>
   <h3>Details</h3>
   <p>Drag the slider to pick a numeric value, or click the value display and type a number directly,

@@ -11,7 +11,7 @@ A Node-RED node that renders an interactive slider **directly on the editor canv
 - **Inject on release** — automatically sends `msg.payload` when the slider thumb is released (can be disabled)
 - Left-side inject button for manual triggering, like the built-in Inject node
 - Slider position persisted to `flows.json` — survives deploy and restart
-- Configurable label, min, max, step, and default value
+- Configurable label, topic, min, max, step, and default value
 - Works with Node-RED 3.x and above; no dependency on node-red-dashboard
 
 ## Installation
@@ -33,12 +33,16 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 
 ### Output
 
-`msg.payload` — the current slider value as a `number`.
+| Property | Type | Description |
+|---|---|---|
+| `msg.payload` | `number` | The current slider value |
+| `msg.topic` | `string` | The topic configured in the edit panel (empty string if not set) |
 
 ## Configuration
 
 | Property | Default | Description |
 |---|---|---|
+| Topic | _(empty)_ | Sets `msg.topic` on every injected message |
 | Min | `0` | Minimum slider value |
 | Max | `100` | Maximum slider value |
 | Step | `1` | Increment between positions (decimals supported, e.g. `0.1`) |
