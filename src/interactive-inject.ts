@@ -57,6 +57,13 @@ function interactiveInjectModule(RED: NodeAPI): void {
         res.status(404).send('Not found');
         return;
       }
+      const body = req.body as { value?: unknown };
+      if (body.value !== undefined) {
+        const v = Number(body.value);
+        if (!isNaN(v)) {
+          node.currentValue = clamp(v, node.minValue, node.maxValue);
+        }
+      }
       node.send({ payload: node.currentValue, topic: node.topic });
       res.json({ value: node.currentValue });
     }

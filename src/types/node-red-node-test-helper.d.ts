@@ -9,6 +9,16 @@ declare module 'node-red-node-test-helper' {
     [key: string]: unknown;
   }
 
+  interface SuperTestAgent {
+    post(url: string): SuperTestRequest;
+  }
+
+  interface SuperTestRequest {
+    send(body: Record<string, unknown>): SuperTestRequest;
+    expect(status: number): Promise<void>;
+    then(resolve: (res: { body: unknown }) => void): Promise<void>;
+  }
+
   interface Helper {
     init(requirePath: string): void;
     startServer(done: () => void): void;
@@ -20,6 +30,7 @@ declare module 'node-red-node-test-helper' {
     ): Promise<void>;
     unload(): Promise<void>;
     getNode(id: string): TestNode;
+    request(): SuperTestAgent;
   }
 
   const helper: Helper;

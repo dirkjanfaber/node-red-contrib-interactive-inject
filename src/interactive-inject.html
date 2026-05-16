@@ -108,7 +108,12 @@
       // Fire inject when the thumb is released (change fires once on commit, not on every move)
       slider.addEventListener("change", function () {
         if (node.injectOnRelease === false) { return; }
-        $.ajax({ url: "interactive-inject/" + node.id + "/inject", type: "POST" });
+        $.ajax({
+          url: "interactive-inject/" + node.id + "/inject",
+          type: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({ value: parseFloat(this.value) }),
+        });
       });
 
       // Prevent canvas drag from stealing pointer events while the slider is active
@@ -130,7 +135,12 @@
         if (e.key === "Enter") {
           commitTyped();
           if (node.injectOnRelease !== false) {
-            $.ajax({ url: "interactive-inject/" + node.id + "/inject", type: "POST" });
+            $.ajax({
+              url: "interactive-inject/" + node.id + "/inject",
+              type: "POST",
+              contentType: "application/json",
+              data: JSON.stringify({ value: parseFloat(valueDisplay.value) }),
+            });
           }
           this.blur();
         } else if (e.key === "Escape") {
