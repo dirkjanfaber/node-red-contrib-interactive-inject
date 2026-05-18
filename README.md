@@ -2,7 +2,7 @@
 
 A Node-RED node that renders an interactive slider **directly on the editor canvas** — no dashboard required. Drag the thumb or type a value directly to set a number; release (or press Enter, or click the button) to inject it into your flow.
 
-<img src="https://raw.githubusercontent.com/dirkjanfaber/node-red-contrib-interactive-inject/main/docs/screenshot.png" alt="interactive-inject node on the Node-RED canvas" width="382">
+<img src="https://raw.githubusercontent.com/dirkjanfaber/node-red-contrib-interactive-inject/main/docs/screenshot.png" alt="interactive-inject node on the Node-RED canvas" width="500">
 
 ## Features
 
