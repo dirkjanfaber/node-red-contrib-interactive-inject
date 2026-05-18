@@ -5,21 +5,31 @@ import { NodeDef, Node } from '@node-red/registry';
 
 type NodeAPI = NodeRed.NodeAPI;
 
+interface PresetItem {
+  label: string;
+  value: unknown;
+  valueType?: string;
+}
+
 interface InteractiveInjectConfig extends NodeDef {
+  mode?: 'slider' | 'presets';
   minValue?: number;
   maxValue?: number;
   step?: number;
   defaultValue?: number;
   currentValue?: number;
   topic?: string;
+  presets?: PresetItem[];
 }
 
 interface InteractiveInjectNode extends Node {
+  mode: 'slider' | 'presets';
   currentValue: number;
   minValue: number;
   maxValue: number;
   step: number;
   topic: string;
+  presets: PresetItem[];
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -69,16 +79,47 @@ function interactiveInjectModule(RED: NodeAPI): void {
     }
   );
 
+  RED.httpAdmin.post(
+    '/interactive-inject/:id/preset',
+    RED.auth.needsPermission('interactive-inject.write'),
+    (req, res) => {
+      const node = RED.nodes.getNode(String(req.params['id'])) as InteractiveInjectNode | null;
+      if (!node) {
+        res.status(404).send('Not found');
+        return;
+      }
+      const body = req.body as { index?: unknown };
+      const index = Number(body.index);
+      if (!Number.isInteger(index) || index < 0 || index >= node.presets.length) {
+        res.status(400).send('Invalid index');
+        return;
+      }
+      const preset = node.presets[index];
+      const rawValue = (typeof preset.value === 'object' && preset.value !== null)
+        ? JSON.stringify(preset.value)
+        : String(preset.value ?? '');
+      const valueType = preset.valueType || 'str';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (RED.util as any).evaluateNodeProperty(rawValue, valueType, node, {}, (err: Error | null, result: unknown) => {
+        if (err) { res.status(500).send(String(err)); return; }
+        node.send({ payload: result, topic: node.topic });
+        res.json({ label: preset.label, value: result });
+      });
+    }
+  );
+
   function InteractiveInjectNode(
     this: InteractiveInjectNode,
     config: InteractiveInjectConfig
   ) {
     RED.nodes.createNode(this, config);
 
+    this.mode = config.mode ?? 'slider';
     this.minValue = config.minValue ?? 0;
     this.maxValue = config.maxValue ?? 100;
     this.step = config.step ?? 1;
     this.topic = config.topic ?? '';
+    this.presets = config.presets ?? [];
     // Prefer the persisted slider position; fall back to the configured default.
     this.currentValue = clamp(
       config.currentValue ?? config.defaultValue ?? this.minValue,

@@ -1,7 +1,7 @@
 {
   "name": "node-red-contrib-interactive-inject",
-  "version": "0.2.7",
-  "description": "A Node-RED node that renders an inline slider on the canvas for interactive value injection",
+  "version": "1.0.0",
+  "description": "A Node-RED node with an interactive slider or preset buttons rendered directly on the canvas for one-click value injection — no dashboard required",
   "main": "dist/interactive-inject.js",
   "files": [
     "dist/interactive-inject.js",
@@ -25,7 +25,10 @@
     "node-red",
     "inject",
     "slider",
+    "preset",
+    "buttons",
     "interactive",
+    "canvas",
     "victron"
   ],
   "repository": {

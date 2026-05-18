@@ -156,18 +156,190 @@
       el.appendChild(fo);
     }
 
+    function renderPresets(el, node) {
+      var old = el.querySelector(".nri-fo");
+      if (old) { old.remove(); }
+
+      var nodeW = node.w || 100;
+      var nodeH = node.h || 30;
+      var presets = node.presets || [];
+
+      // Estimate rows needed so the widget grows to fit wrapped buttons
+      var availW = nodeW - 14;
+      var rows = 1;
+      if (presets.length > 0) {
+        var rowX = 0;
+        presets.forEach(function (p, i) {
+          var bw = Math.max(26, (p.label || String(i + 1)).length * 7 + 14);
+          if (i === 0) { rowX = bw; }
+          else if (rowX + 3 + bw > availW) { rows++; rowX = bw; }
+          else { rowX += 3 + bw; }
+        });
+      }
+      var foH = Math.max(SLIDER_H, 8 + rows * 26 + (rows - 1) * 3 + 16);
+
+      if (el.__mainRect__) {
+        el.__mainRect__.setAttribute("height", nodeH + foH);
+      }
+
+      var fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+      fo.setAttribute("class", "nri-fo");
+      fo.setAttribute("x", "5");
+      fo.setAttribute("y", String(nodeH + 2));
+      fo.setAttribute("width", String(nodeW - 10));
+      fo.setAttribute("height", String(foH - 2));
+
+      var wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;flex-direction:column;gap:2px;padding:4px 0 2px;box-sizing:border-box;height:100%;overflow:hidden";
+
+      if (presets.length === 0) {
+        var hint = document.createElement("span");
+        hint.textContent = "No presets — open editor to add";
+        hint.style.cssText = "font-size:10px;color:rgba(0,0,0,0.4);font-style:italic;align-self:center;width:100%;text-align:center;margin-top:10px";
+        wrap.appendChild(hint);
+      } else {
+        var btnRow = document.createElement("div");
+        btnRow.style.cssText = "display:flex;flex-wrap:wrap;gap:3px;align-content:flex-start";
+
+        var statusDiv = document.createElement("div");
+        statusDiv.style.cssText = [
+          "font-size:10px",
+          "color:rgba(0,0,0,0.45)",
+          "line-height:14px",
+          "white-space:nowrap",
+          "overflow:hidden",
+          "text-overflow:ellipsis",
+          "padding:0 1px",
+          "min-height:14px",
+          "font-style:italic",
+        ].join(";");
+
+        function fmtVal(v) {
+          if (v === null || v === undefined) { return ""; }
+          var s = typeof v === "object" ? JSON.stringify(v) : String(v);
+          return s.length > 28 ? s.slice(0, 28) + "…" : s;
+        }
+
+        function fmtPreset(p) {
+          switch (p.valueType) {
+            case "date":    return "timestamp";
+            case "bin":     return "buffer";
+            case "env":     return "$" + (p.value || "");
+            case "flow":    return "flow." + (p.value || "");
+            case "global":  return "global." + (p.value || "");
+            case "jsonata": { var e = String(p.value || ""); return "ƒ(" + (e.length > 18 ? e.slice(0, 18) + "…" : e) + ")"; }
+            default:        return fmtVal(p.value);
+          }
+        }
+
+        var buttons = [];
+
+        function applySelection(selectedIdx) {
+          node.lastPresetIndex = selectedIdx;
+          buttons.forEach(function (b, j) {
+            if (j === selectedIdx) {
+              b.style.border = "2px solid #4aa3df";
+              b.style.boxShadow = "0 0 0 1px rgba(74,163,223,0.3)";
+            } else {
+              b.style.border = "1px solid rgba(0,0,0,0.25)";
+              b.style.boxShadow = "none";
+            }
+          });
+        }
+
+        presets.forEach(function (preset, i) {
+          var btn = document.createElement("button");
+          btn.textContent = preset.label || String(i + 1);
+          btn.style.cssText = [
+            "font-size:11px",
+            "font-weight:600",
+            "padding:3px 7px",
+            "border:1px solid rgba(0,0,0,0.25)",
+            "border-radius:4px",
+            "background:rgba(0,0,0,0.12)",
+            "color:var(--red-ui-node-label-color,#333)",
+            "cursor:pointer",
+            "pointer-events:all",
+            "user-select:none",
+            "-webkit-user-select:none",
+            "min-width:26px",
+            "line-height:18px",
+            "flex-shrink:0",
+            "box-sizing:border-box",
+          ].join(";");
+
+          buttons.push(btn);
+
+          btn.addEventListener("mouseenter", (function (idx) {
+            return function () {
+              statusDiv.textContent = (presets[idx].label || String(idx + 1)) + ": " + fmtPreset(presets[idx]);
+            };
+          })(i));
+          btn.addEventListener("mouseleave", function () { statusDiv.textContent = node._lastStatusText || ""; });
+          btn.addEventListener("mousedown", function (e) { e.stopPropagation(); });
+          btn.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+          btn.addEventListener("click", (function (idx) {
+            return function (e) {
+              e.stopPropagation();
+              applySelection(idx);
+              $.ajax({
+                url: "interactive-inject/" + node.id + "/preset",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ index: idx }),
+                success: function (resp) {
+                  node._lastStatusText = (resp.label || String(idx + 1)) + ": " + fmtVal(resp.value);
+                  statusDiv.textContent = node._lastStatusText;
+                },
+              });
+            };
+          })(i));
+
+          btnRow.appendChild(btn);
+        });
+
+        // Restore selection and last-inject status across redraws
+        if (typeof node.lastPresetIndex === "number" && node.lastPresetIndex < presets.length) {
+          applySelection(node.lastPresetIndex);
+        }
+        if (node._lastStatusText) {
+          statusDiv.textContent = node._lastStatusText;
+        }
+
+        wrap.appendChild(btnRow);
+        wrap.appendChild(statusDiv);
+      }
+
+      ["mousedown","mouseup","click","pointerdown","pointerup"].forEach(function (type) {
+        fo.addEventListener(type, function (e) { e.stopPropagation(); });
+      });
+
+      fo.appendChild(wrap);
+      el.appendChild(fo);
+    }
+
+    function renderWidget(el, node) {
+      if (node.mode === "presets") {
+        renderPresets(el, node);
+      } else {
+        renderSlider(el, node);
+      }
+    }
+
     RED.nodes.registerType("interactive-inject", {
       category: "common",
       color: "#a6bbcf",
       defaults: {
         name:            { value: "" },
         topic:           { value: "" },
+        mode:            { value: "slider" },
         minValue:        { value: 0,   validate: RED.validators.number() },
         maxValue:        { value: 100, validate: RED.validators.number() },
         step:            { value: 1,   validate: RED.validators.number() },
         defaultValue:    { value: 50,  validate: RED.validators.number() },
         currentValue:    { value: undefined },
         injectOnRelease: { value: true },
+        presets:         { value: [] },
       },
       inputs: 0,
       outputs: 1,
@@ -183,6 +355,31 @@
         onclick: function () {
           var node = this;
           var displayLabel = node.name || node.label || "interactive inject";
+          if (node.mode === "presets") {
+            if (!node.presets || node.presets.length === 0) { return; }
+            var idx = typeof node.lastPresetIndex === "number"
+              ? Math.min(node.lastPresetIndex, node.presets.length - 1)
+              : 0;
+            $.ajax({
+              url: "interactive-inject/" + node.id + "/preset",
+              type: "POST",
+              contentType: "application/json",
+              data: JSON.stringify({ index: idx }),
+              success: function (resp) {
+                RED.notify(
+                  displayLabel + ': injected "' + resp.label + '"',
+                  { type: "success", timeout: 1500 }
+                );
+              },
+              error: function (jqXHR) {
+                RED.notify(
+                  displayLabel + ": " + (jqXHR.responseText || "error"),
+                  { type: "error", timeout: 3000 }
+                );
+              },
+            });
+            return;
+          }
           $.ajax({
             url: "interactive-inject/" + node.id + "/inject",
             type: "POST",
@@ -203,15 +400,80 @@
       },
 
       oneditprepare: function () {
+        var node = this;
+
+        function updateModeVisibility() {
+          var m = $("#node-input-mode").val();
+          if (m === "presets") {
+            $("#nri-slider-section").hide();
+            $("#nri-presets-section").show();
+          } else {
+            $("#nri-slider-section").show();
+            $("#nri-presets-section").hide();
+          }
+        }
+
+        $("#node-input-mode").val(this.mode || "slider").on("change", updateModeVisibility);
+        updateModeVisibility();
+
         $("#node-input-topic").val(this.topic || "");
         $("#node-input-minValue").val(this.minValue);
         $("#node-input-maxValue").val(this.maxValue);
         $("#node-input-step").val(this.step);
         $("#node-input-defaultValue").val(this.defaultValue);
         $("#node-input-injectOnRelease").prop("checked", this.injectOnRelease !== false);
+
+        $("#node-input-presets-list").editableList({
+          addItem: function (container, i, data) {
+            var row = $("<div>").css({ display: "flex", gap: "0", alignItems: "center", width: "100%" });
+            var labelIn = $('<input type="text">')
+              .addClass("nri-preset-label")
+              .attr("placeholder", "Button label")
+              .css({ width: "90px", flex: "none", borderRadius: "3px 0 0 3px", borderRight: "none", boxSizing: "border-box" })
+              .val(data.label || "");
+            var sep = $('<span>').css({
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: "22px", flexShrink: "0",
+              background: "var(--red-ui-secondary-background-color, #f0f0f0)",
+              border: "1px solid var(--red-ui-form-input-border-color, #ccc)",
+              borderLeft: "none", borderRight: "none",
+              color: "var(--red-ui-secondary-text-color, #888)",
+              fontSize: "11px", lineHeight: "1", alignSelf: "stretch",
+              userSelect: "none"
+            }).text("→");
+            var valueWrap = $("<div>").css({ flex: "1", minWidth: "0" });
+            var valueIn = $('<input type="text">').addClass("nri-preset-value").css({ width: "100%", boxSizing: "border-box" });
+            valueWrap.append(valueIn);
+            row.append(labelIn).append(sep).append(valueWrap);
+            container.append(row);
+
+            valueIn.typedInput({ types: ["flow", "global", "str", "num", "bool", "json", "bin", "date", "jsonata", "env"] });
+            // typedInput wraps the input in a .red-ui-typedInput-container; round only the right corners
+            // so it visually connects to the separator on the left
+            valueIn.typedInput("widget").css({ borderRadius: "0 3px 3px 0" });
+
+            if (data.valueType) {
+              valueIn.typedInput("type", data.valueType);
+            }
+            if (data.value !== undefined) {
+              var stored = (data.valueType === "json" || (data.value !== null && typeof data.value === "object"))
+                ? JSON.stringify(data.value)
+                : String(data.value);
+              valueIn.typedInput("value", stored);
+            }
+          },
+          removable: true,
+          sortable: true,
+        });
+
+        (node.presets || []).forEach(function (p) {
+          $("#node-input-presets-list").editableList("addItem", p);
+        });
+
       },
 
       oneditsave: function () {
+        this.mode            = $("#node-input-mode").val();
         this.topic           = $("#node-input-topic").val();
         this.minValue        = parseFloat($("#node-input-minValue").val());
         this.maxValue        = parseFloat($("#node-input-maxValue").val());
@@ -223,12 +485,22 @@
         );
         this.injectOnRelease = $("#node-input-injectOnRelease").is(":checked");
         this.currentValue    = this.defaultValue;
+
+        var presets = [];
+        $("#node-input-presets-list").editableList("items").each(function () {
+          var labelIn = $(this).find(".nri-preset-label");
+          var valueIn = $(this).find(".nri-preset-value");
+          var typeStr = valueIn.typedInput("type");
+          var rawVal  = valueIn.typedInput("value");
+          presets.push({ label: String(labelIn.val() || (presets.length + 1)), value: rawVal, valueType: typeStr });
+        });
+        this.presets = presets;
       },
     });
 
     function onNodeDraw(evt) {
       if (evt.node.type === "interactive-inject") {
-        renderSlider(evt.el, evt.node);
+        renderWidget(evt.el, evt.node);
       }
     }
 
@@ -247,56 +519,67 @@
     <label for="node-input-topic"><i class="fa fa-tasks"></i> Topic</label>
     <input type="text" id="node-input-topic" placeholder="msg.topic (optional)">
   </div>
-  <div class="form-row" style="margin-bottom:4px">
-    <label style="color:var(--red-ui-secondary-text-color,#888);font-size:11px;text-transform:uppercase;letter-spacing:.04em">Slider range</label>
-  </div>
   <div class="form-row">
-    <label for="node-input-minValue"><i class="fa fa-minus"></i> Min</label>
-    <input type="number" id="node-input-minValue" step="any" style="width:120px">
+    <label for="node-input-mode"><i class="fa fa-th-large"></i> Mode</label>
+    <select id="node-input-mode" style="width:auto">
+      <option value="slider">Slider</option>
+      <option value="presets">Preset buttons</option>
+    </select>
   </div>
-  <div class="form-row">
-    <label for="node-input-maxValue"><i class="fa fa-plus"></i> Max</label>
-    <input type="number" id="node-input-maxValue" step="any" style="width:120px">
+
+  <div id="nri-slider-section">
+    <div class="form-row" style="margin-bottom:6px;align-items:center">
+      <label style="color:var(--red-ui-secondary-text-color,#888);font-size:11px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;width:auto;min-width:0;margin-bottom:0"><i class="fa fa-sliders" style="margin-right:5px"></i>Slider range</label>
+    </div>
+    <div class="form-row">
+      <label for="node-input-minValue"><i class="fa fa-minus"></i> Min</label>
+      <input type="number" id="node-input-minValue" step="any" style="width:120px">
+    </div>
+    <div class="form-row">
+      <label for="node-input-maxValue"><i class="fa fa-plus"></i> Max</label>
+      <input type="number" id="node-input-maxValue" step="any" style="width:120px">
+    </div>
+    <div class="form-row">
+      <label for="node-input-step"><i class="fa fa-arrows-h"></i> Step</label>
+      <input type="number" id="node-input-step" step="any" min="0" style="width:120px">
+    </div>
+    <div class="form-row">
+      <label for="node-input-defaultValue"><i class="fa fa-sliders"></i> Default</label>
+      <input type="number" id="node-input-defaultValue" step="any" style="width:120px">
+    </div>
+    <div class="form-row">
+      <label for="node-input-injectOnRelease"><i class="fa fa-paper-plane-o"></i> Inject on release</label>
+      <input type="checkbox" id="node-input-injectOnRelease" style="width:auto">
+    </div>
   </div>
-  <div class="form-row">
-    <label for="node-input-step"><i class="fa fa-arrows-h"></i> Step</label>
-    <input type="number" id="node-input-step" step="any" min="0" style="width:120px">
-  </div>
-  <div class="form-row">
-    <label for="node-input-defaultValue"><i class="fa fa-sliders"></i> Default</label>
-    <input type="number" id="node-input-defaultValue" step="any" style="width:120px">
-  </div>
-  <div class="form-row">
-    <label for="node-input-injectOnRelease"><i class="fa fa-paper-plane-o"></i> Inject on release</label>
-    <input type="checkbox" id="node-input-injectOnRelease" style="width:auto">
+
+  <div id="nri-presets-section">
+    <div class="form-row" style="margin-bottom:6px;align-items:center">
+      <label style="color:var(--red-ui-secondary-text-color,#888);font-size:11px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;width:auto;min-width:0;margin-bottom:0"><i class="fa fa-th" style="margin-right:5px"></i>Preset buttons</label>
+    </div>
+    <div class="form-row" style="margin-bottom:8px">
+      <ol id="node-input-presets-list"></ol>
+    </div>
   </div>
 </script>
 
 <script type="text/html" data-help-name="interactive-inject">
-  <p>An inject node with an inline slider rendered directly on the Node-RED canvas.</p>
+  <p>An inject node with an inline widget rendered directly on the Node-RED canvas — either a numeric slider or a set of configurable preset buttons.</p>
+  <h3>Modes</h3>
+  <dl class="message-properties">
+    <dt>Slider</dt>
+    <dd>Drag the range slider or type a value directly to pick a number. Releasing the slider (or pressing Enter) injects <code>msg.payload</code> as a number.</dd>
+    <dt>Preset buttons</dt>
+    <dd>Each button is configured with a label and a value (string, number, boolean, or JSON). Clicking a button injects that value as <code>msg.payload</code>.</dd>
+  </dl>
   <h3>Outputs</h3>
   <dl class="message-properties">
-    <dt>payload <span class="property-type">number</span></dt>
-    <dd>The current slider value when the button is clicked or the slider is released.</dd>
+    <dt>payload <span class="property-type">number | string | boolean | object</span></dt>
+    <dd>The current slider value, or the value of the clicked preset button.</dd>
     <dt>topic <span class="property-type">string</span></dt>
     <dd>The topic configured in the edit panel (empty string if not set).</dd>
   </dl>
   <h3>Details</h3>
-  <p>Drag the slider to pick a numeric value, or click the value display and type a number directly,
-     then press <strong>Enter</strong> to commit (or <strong>Escape</strong> to cancel).</p>
-  <p>When <em>Inject on release</em> is enabled (default), releasing the slider or pressing Enter
-     automatically sends <code>msg.payload</code> into the flow. The button on the left of the
-     node sends the current value manually at any time.</p>
-  <h4>Wrapping the value in a JSON object</h4>
-  <p>To send <code>{ "/Temperature": 25 }</code> instead of a plain number, add a
-     <strong>Change</strong> node after this one and configure one rule:</p>
-  <ul>
-    <li>Action: <em>Set</em></li>
-    <li>Target: <code>msg.payload</code></li>
-    <li>Type: <em>J: expression</em></li>
-    <li>Value: <code>{"/Temperature": payload}</code></li>
-  </ul>
-  <p>The JSONata expression reads the incoming numeric <code>msg.payload</code> and
-     builds a new object from it. See <strong>Import → Examples →
-     node-red-contrib-interactive-inject</strong> for a ready-made flow.</p>
+  <p>In <em>Slider</em> mode, drag the slider or click the value display and type a number, then press <strong>Enter</strong> to commit (or <strong>Escape</strong> to cancel). When <em>Inject on release</em> is enabled (default), releasing the slider or pressing Enter automatically sends the value. The button on the left of the node injects the current value manually at any time.</p>
+  <p>In <em>Preset buttons</em> mode, configure any number of buttons in the edit panel. Each button has a label (shown on the canvas) and a value that is sent as <code>msg.payload</code> when clicked. Values can be strings, numbers, booleans, or JSON objects/arrays.</p>
 </script>

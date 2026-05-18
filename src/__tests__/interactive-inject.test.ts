@@ -115,6 +115,158 @@ describe('interactive-inject node', () => {
     });
   });
 
+  describe('preset buttons mode', () => {
+    const PRESETS_FLOW = (presets: unknown[] = []) => [
+      {
+        id: 'n1',
+        type: 'interactive-inject',
+        name: 'test presets',
+        mode: 'presets',
+        topic: 'preset-topic',
+        presets,
+        wires: [['n2']],
+      },
+      { id: 'n2', type: 'helper' },
+    ];
+
+    it('loads in presets mode without error', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW());
+      const n1 = helper.getNode('n1');
+      expect(n1).toBeDefined();
+    });
+
+    it('POST /preset injects a string value', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW([
+        { label: 'Hello', value: 'hello world', valueType: 'str' },
+      ]));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/preset')
+        .send({ index: 0 })
+        .expect(200);
+
+      const msg = await msgPromise;
+      expect(msg.payload).toBe('hello world');
+      expect(msg.topic).toBe('preset-topic');
+    });
+
+    it('POST /preset injects a numeric value', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW([
+        { label: 'Level', value: '42', valueType: 'num' },
+      ]));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/preset')
+        .send({ index: 0 })
+        .expect(200);
+
+      const msg = await msgPromise;
+      expect(msg.payload).toBe(42);
+    });
+
+    it('POST /preset injects a boolean value', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW([
+        { label: 'Off', value: 'false', valueType: 'bool' },
+      ]));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/preset')
+        .send({ index: 0 })
+        .expect(200);
+
+      const msg = await msgPromise;
+      expect(msg.payload).toBe(false);
+    });
+
+    it('POST /preset injects a JSON value', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW([
+        { label: 'Config', value: '{"brightness":70,"color_temp":4000}', valueType: 'json' },
+      ]));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/preset')
+        .send({ index: 0 })
+        .expect(200);
+
+      const msg = await msgPromise;
+      expect(msg.payload).toEqual({ brightness: 70, color_temp: 4000 });
+    });
+
+    it('POST /preset injects a timestamp for date type', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW([
+        { label: 'Now', value: '', valueType: 'date' },
+      ]));
+      const n2 = helper.getNode('n2');
+      const before = Date.now();
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/preset')
+        .send({ index: 0 })
+        .expect(200);
+
+      const msg = await msgPromise;
+      const after = Date.now();
+      expect(typeof msg.payload).toBe('number');
+      expect(msg.payload as number).toBeGreaterThanOrEqual(before);
+      expect(msg.payload as number).toBeLessThanOrEqual(after);
+    });
+
+    it('POST /preset selects the correct preset by index', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW([
+        { label: 'A', value: 'first',  valueType: 'str' },
+        { label: 'B', value: 'second', valueType: 'str' },
+        { label: 'C', value: 'third',  valueType: 'str' },
+      ]));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/preset')
+        .send({ index: 2 })
+        .expect(200);
+
+      const msg = await msgPromise;
+      expect(msg.payload).toBe('third');
+    });
+
+    it('POST /preset returns 400 for out-of-range index', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW([
+        { label: 'A', value: '1', valueType: 'num' },
+      ]));
+      await helper.request()
+        .post('/interactive-inject/n1/preset')
+        .send({ index: 5 })
+        .expect(400);
+    });
+
+    it('POST /preset returns 400 for negative index', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW([
+        { label: 'A', value: '1', valueType: 'num' },
+      ]));
+      await helper.request()
+        .post('/interactive-inject/n1/preset')
+        .send({ index: -1 })
+        .expect(400);
+    });
+
+    it('POST /preset returns 404 for unknown node id', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW());
+      await helper.request()
+        .post('/interactive-inject/unknown/preset')
+        .send({ index: 0 })
+        .expect(404);
+    });
+  });
+
   describe('HTTP endpoints', () => {
     it('POST /inject sends msg.payload with node.currentValue and msg.topic', async () => {
       await helper.load(interactiveInjectNode, BASE_FLOW());

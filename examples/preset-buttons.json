@@ -1,0 +1,173 @@
+[
+    {
+        "id": "tab-nri-presets",
+        "type": "tab",
+        "label": "Interactive Inject — Preset Buttons",
+        "disabled": false,
+        "info": "Demonstrates the interactive-inject node in **Preset buttons** mode.\n\n- Click any canvas button to inject its pre-configured value.\n- Hover over a button to preview its value in the status strip below the buttons.\n- The last-clicked button is highlighted with a blue border and is also fired by the left inject arrow.\n\nThree nodes show different payload types:\n- **ESS Mode** — numeric presets (integer mode codes)\n- **HVAC** — boolean and string presets\n- **Light scene** — JSON object presets"
+    },
+    {
+        "id": "nri-presets-comment",
+        "type": "comment",
+        "z": "tab-nri-presets",
+        "name": "Click a preset button to inject its value. Hover to preview it in the status strip. The blue-highlighted button is re-fired by the left inject arrow.",
+        "info": "",
+        "x": 480,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "nri-presets-ess",
+        "type": "interactive-inject",
+        "z": "tab-nri-presets",
+        "name": "ESS Mode",
+        "topic": "Mode",
+        "mode": "presets",
+        "minValue": 0,
+        "maxValue": 100,
+        "step": 1,
+        "defaultValue": 50,
+        "currentValue": 50,
+        "injectOnRelease": true,
+        "presets": [
+            {
+                "label": "Optimised",
+                "value": "1",
+                "valueType": "num"
+            },
+            {
+                "label": "Ext. control",
+                "value": "2",
+                "valueType": "num"
+            },
+            {
+                "label": "Keep charged",
+                "value": "3",
+                "valueType": "num"
+            },
+            {
+                "label": "Timestamp",
+                "value": "",
+                "valueType": "date"
+            }
+        ],
+        "x": 160,
+        "y": 120,
+        "wires": [
+            [
+                "nri-presets-debug"
+            ]
+        ]
+    },
+    {
+        "id": "nri-presets-hvac",
+        "type": "interactive-inject",
+        "z": "tab-nri-presets",
+        "name": "HVAC",
+        "topic": "hvac/mode",
+        "mode": "presets",
+        "minValue": 0,
+        "maxValue": 100,
+        "step": 1,
+        "defaultValue": 50,
+        "currentValue": 50,
+        "injectOnRelease": true,
+        "presets": [
+            {
+                "label": "Off",
+                "value": "false",
+                "valueType": "bool"
+            },
+            {
+                "label": "Auto",
+                "value": "auto",
+                "valueType": "str"
+            },
+            {
+                "label": "Heat",
+                "value": "heat",
+                "valueType": "str"
+            },
+            {
+                "label": "Cool",
+                "value": "cool",
+                "valueType": "str"
+            }
+        ],
+        "x": 150,
+        "y": 300,
+        "wires": [
+            [
+                "nri-presets-debug"
+            ]
+        ]
+    },
+    {
+        "id": "nri-presets-scene",
+        "type": "interactive-inject",
+        "z": "tab-nri-presets",
+        "name": "Light scene",
+        "topic": "light/scene",
+        "mode": "presets",
+        "minValue": 0,
+        "maxValue": 100,
+        "step": 1,
+        "defaultValue": 50,
+        "currentValue": 50,
+        "injectOnRelease": true,
+        "presets": [
+            {
+                "label": "Off",
+                "value": "false",
+                "valueType": "bool"
+            },
+            {
+                "label": "Morning",
+                "value": "{\"brightness\":70,\"color_temp\":4000}",
+                "valueType": "json"
+            },
+            {
+                "label": "Evening",
+                "value": "{\"brightness\":40,\"color_temp\":2700}",
+                "valueType": "json"
+            },
+            {
+                "label": "Night",
+                "value": "{\"brightness\":5,\"color_temp\":2200}",
+                "valueType": "json"
+            }
+        ],
+        "x": 170,
+        "y": 460,
+        "wires": [
+            [
+                "nri-presets-debug"
+            ]
+        ]
+    },
+    {
+        "id": "nri-presets-debug",
+        "type": "debug",
+        "z": "tab-nri-presets",
+        "name": "",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 430,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "48d5d866bc234a0d",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-interactive-inject": "0.2.7"
+        }
+    }
+]
