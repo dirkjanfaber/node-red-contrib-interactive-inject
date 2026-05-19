@@ -456,7 +456,7 @@
               valueIn.typedInput("type", data.valueType);
             }
             if (data.value !== undefined) {
-              var stored = (data.valueType === "json" || (data.value !== null && typeof data.value === "object"))
+              var stored = (data.value !== null && typeof data.value === "object")
                 ? JSON.stringify(data.value)
                 : String(data.value);
               valueIn.typedInput("value", stored);
