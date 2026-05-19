@@ -1,17 +1,18 @@
 # node-red-contrib-interactive-inject
 
-A Node-RED node that renders an interactive slider **directly on the editor canvas** — no dashboard required. Drag the thumb or type a value directly to set a number; release (or press Enter, or click the button) to inject it into your flow.
+A Node-RED node that renders an interactive widget **directly on the editor canvas** — no dashboard required. Choose between a **numeric slider** or a set of **preset buttons**; either way, clicking or dragging injects a value straight into your flow.
 
 <img src="https://raw.githubusercontent.com/dirkjanfaber/node-red-contrib-interactive-inject/main/docs/screenshot.png" alt="interactive-inject node on the Node-RED canvas" width="500">
 
 ## Features
 
-- Inline `<input type="range">` slider embedded in the node body via SVG `<foreignObject>`
-- Editable value display — drag the slider or click the number and type directly; press **Enter** to commit or **Escape** to cancel
-- **Inject on release** — automatically sends `msg.payload` when the slider thumb is released (can be disabled)
+- Two modes selectable per node: **Slider** and **Preset buttons**
+- **Slider mode** — inline `<input type="range">` embedded in the node body; drag the thumb or click the number and type directly; press **Enter** to commit or **Escape** to cancel
+- **Preset buttons mode** — configurable buttons rendered on the canvas; each button has a label and an arbitrary typed value (string, number, boolean, JSON, …)
+- **Inject on release** (slider mode) — automatically sends `msg.payload` when the thumb is released (can be disabled)
 - Left-side inject button for manual triggering, like the built-in Inject node
-- Slider position persisted to `flows.json` — survives deploy and restart
-- Configurable label, topic, min, max, step, and default value
+- Last value/selection persisted to `flows.json` — survives deploy and restart
+- Configurable label and topic for both modes
 - Works with Node-RED 3.x and above; no dependency on node-red-dashboard
 
 ## Installation
@@ -27,27 +28,51 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 ## Usage
 
 1. Drag the **interactive inject** node from the **common** category onto the canvas.
-2. Drag the slider thumb to your desired value, or click the number display and type a value directly.
-3. The value is injected automatically when you release the thumb or press **Enter** (if *Inject on release* is enabled, which is the default).
-4. Click the button on the left side of the node to inject manually at any time.
+2. Open the edit panel and choose a **Mode**: *Slider* or *Preset buttons*.
+
+**Slider mode**
+
+- Drag the slider thumb to your desired value, or click the number display and type a value directly.
+- The value is injected automatically when you release the thumb or press **Enter** (if *Inject on release* is enabled, which is the default).
+- Click the button on the left side of the node to inject the current value manually at any time.
+
+**Preset buttons mode**
+
+- Add one or more presets in the edit panel — give each a **label** and a **value** (any supported type).
+- The buttons appear directly on the canvas; click one to inject its value immediately.
+- The last clicked preset is highlighted and re-injected when the left-side button is pressed.
 
 ### Output
 
 | Property | Type | Description |
 |---|---|---|
-| `msg.payload` | `number` | The current slider value |
+| `msg.payload` | any | The current slider value, or the value of the clicked preset button |
 | `msg.topic` | `string` | The topic configured in the edit panel (empty string if not set) |
 
 ## Configuration
 
+### Common
+
 | Property | Default | Description |
 |---|---|---|
+| Mode | `Slider` | Choose between *Slider* and *Preset buttons* |
 | Topic | _(empty)_ | Sets `msg.topic` on every injected message |
+
+### Slider mode
+
+| Property | Default | Description |
+|---|---|---|
 | Min | `0` | Minimum slider value |
 | Max | `100` | Maximum slider value |
 | Step | `1` | Increment between positions (decimals supported, e.g. `0.1`) |
 | Default | `50` | Value on first load |
 | Inject on release | `true` | Send automatically when the thumb is released |
+
+### Preset buttons mode
+
+| Property | Description |
+|---|---|
+| Presets | Ordered list of buttons. Each entry has a **Label** (shown on the button) and a **Value** with a type selector (string, number, boolean, JSON object, etc.) |
 
 ## Wrapping the value in a JSON object
 
