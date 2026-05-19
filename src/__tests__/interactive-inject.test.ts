@@ -150,6 +150,7 @@ describe('interactive-inject node', () => {
       const msg = await msgPromise;
       expect(msg.payload).toBe('hello world');
       expect(msg.topic).toBe('preset-topic');
+      expect(msg.label).toBe('Hello');
     });
 
     it('POST /preset injects a numeric value', async () => {
@@ -198,6 +199,23 @@ describe('interactive-inject node', () => {
 
       const msg = await msgPromise;
       expect(msg.payload).toEqual({ brightness: 70, color_temp: 4000 });
+    });
+
+    it('POST /preset JSONata expression can reference label', async () => {
+      await helper.load(interactiveInjectNode, PRESETS_FLOW([
+        { label: '2000', value: '{ "offset": $number(label) }', valueType: 'jsonata' },
+      ]));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/preset')
+        .send({ index: 0 })
+        .expect(200);
+
+      const msg = await msgPromise;
+      expect(msg.payload).toEqual({ offset: 2000 });
+      expect(msg.label).toBe('2000');
     });
 
     it('POST /preset injects a timestamp for date type', async () => {

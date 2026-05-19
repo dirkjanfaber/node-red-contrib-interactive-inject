@@ -1,0 +1,79 @@
+[
+    {
+        "id": "tab-nri-jsonata-label",
+        "type": "tab",
+        "label": "Interactive Inject — JSONata label variable",
+        "disabled": false,
+        "info": "Demonstrates using the button label as a variable inside a JSONata preset value.\n\nWhen the value type is set to **J: expression**, the button's own label is available as `label` inside the expression. This lets you encode a parameter once — in the button name — and reference it in the expression without duplication.\n\n**Schedule offset** — each button label is a number of seconds. The JSONata expression converts it to milliseconds and computes an absolute execution timestamp:\n```\n{\"offsetSec\": $number(label), \"executeAt\": $millis() + $number(label) * 1000}\n```\n\nThe debug node is set to show the full message so you can see both `msg.payload` (the computed object) and `msg.label` (the raw button label)."
+    },
+    {
+        "id": "nri-jl-comment",
+        "type": "comment",
+        "z": "tab-nri-jsonata-label",
+        "name": "The button label is available as `label` in JSONata expressions — encode a parameter once, use it in the value.",
+        "info": "",
+        "x": 500,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "nri-jl-offset",
+        "type": "interactive-inject",
+        "z": "tab-nri-jsonata-label",
+        "name": "Schedule offset",
+        "topic": "schedule",
+        "mode": "presets",
+        "minValue": 0,
+        "maxValue": 100,
+        "step": 1,
+        "defaultValue": 50,
+        "currentValue": 50,
+        "injectOnRelease": true,
+        "presets": [
+            {
+                "label": "30",
+                "value": "{\"offsetSec\": $number(label), \"executeAt\": $millis() + $number(label) * 1000}",
+                "valueType": "jsonata"
+            },
+            {
+                "label": "120",
+                "value": "{\"offsetSec\": $number(label), \"executeAt\": $millis() + $number(label) * 1000}",
+                "valueType": "jsonata"
+            },
+            {
+                "label": "300",
+                "value": "{\"offsetSec\": $number(label), \"executeAt\": $millis() + $number(label) * 1000}",
+                "valueType": "jsonata"
+            },
+            {
+                "label": "3600",
+                "value": "{\"offsetSec\": $number(label), \"executeAt\": $millis() + $number(label) * 1000}",
+                "valueType": "jsonata"
+            }
+        ],
+        "x": 160,
+        "y": 160,
+        "wires": [
+            [
+                "nri-jl-debug"
+            ]
+        ]
+    },
+    {
+        "id": "nri-jl-debug",
+        "type": "debug",
+        "z": "tab-nri-jsonata-label",
+        "name": "",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 390,
+        "y": 160,
+        "wires": []
+    }
+]

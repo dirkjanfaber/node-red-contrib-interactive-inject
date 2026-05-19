@@ -48,6 +48,7 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 |---|---|---|
 | `msg.payload` | any | The current slider value, or the value of the clicked preset button |
 | `msg.topic` | `string` | The topic configured in the edit panel (empty string if not set) |
+| `msg.label` | `string` | _(Preset buttons mode only)_ The label of the clicked button |
 
 ## Configuration
 
@@ -74,6 +75,31 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 |---|---|
 | Presets | Ordered list of buttons. Each entry has a **Label** (shown on the button) and a **Value** with a type selector (string, number, boolean, JSON object, etc.) |
 
+### Using the label in a JSONata preset value
+
+When the value type is set to **J: expression** (JSONata), the button's label is available as the variable `label`. This lets you encode a parameter directly in the button name and reference it in the expression without duplication.
+
+Example — button label `2000`, value type JSONata:
+
+```jsonata
+{ "offset": $number(label) }
+```
+
+Produces `msg.payload = { "offset": 2000 }` and `msg.label = "2000"`.
+
+A more complete example — label `now +2m: 5k`, value type JSONata:
+
+```jsonata
+{
+  "lowerLimit": -5000,
+  "upperLimit": 5000,
+  "duration": 900000,
+  "executionTime": $millis() + 2 * 60 * 1000
+}
+```
+
+Here the execution time is computed at the moment the button is pressed, so it always reflects the actual current time plus the offset.
+
 ## Wrapping the value in a JSON object
 
 To output `{ "/Temperature": 25 }` instead of a plain number, add a **Change** node after this one:
@@ -84,6 +110,14 @@ To output `{ "/Temperature": 25 }` instead of a plain number, add a **Change** n
 - Value: `{"/Temperature": payload}`
 
 The JSONata expression reads the incoming numeric `msg.payload` and builds the object. A ready-made example of this pattern is included — see **Import → Examples → node-red-contrib-interactive-inject → basic-usage** in the Node-RED editor.
+
+Additional examples are available under the same import path:
+
+| Example | Description |
+|---|---|
+| `basic-usage` | Slider with a Change node that wraps the value in a JSON key |
+| `preset-buttons` | Preset buttons mode with string, number, boolean, and JSON value types |
+| `preset-jsonata-label` | Preset buttons with JSONata expressions that reference the button label via `label` |
 
 ## Development
 

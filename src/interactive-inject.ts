@@ -100,9 +100,9 @@ function interactiveInjectModule(RED: NodeAPI): void {
         : String(preset.value ?? '');
       const valueType = preset.valueType || 'str';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (RED.util as any).evaluateNodeProperty(rawValue, valueType, node, {}, (err: Error | null, result: unknown) => {
+      (RED.util as any).evaluateNodeProperty(rawValue, valueType, node, { label: preset.label }, (err: Error | null, result: unknown) => {
         if (err) { res.status(500).send(String(err)); return; }
-        node.send({ payload: result, topic: node.topic });
+        node.send({ payload: result, topic: node.topic, label: preset.label });
         res.json({ label: preset.label, value: result });
       });
     }
