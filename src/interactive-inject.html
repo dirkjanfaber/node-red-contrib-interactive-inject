@@ -593,11 +593,10 @@
             var valueWrap = $("<div>").css({ flex: "1", minWidth: "0" });
             var valueIn = $('<input type="text">').addClass("nri-preset-value").css({ width: "100%", boxSizing: "border-box" });
             valueWrap.append(valueIn);
-            var fullMsgWrap = $("<div>").css({ display: "flex", alignItems: "center", gap: "3px", marginLeft: "6px", flex: "none", whiteSpace: "nowrap" });
+            var fullMsgWrap = $("<div>").css({ display: "none", alignItems: "center", gap: "3px", marginLeft: "6px", flex: "none", whiteSpace: "nowrap" });
             var fullMsgCheck = $('<input type="checkbox">').addClass("nri-preset-fullmsg").attr("title", "Send as full message object");
             var fullMsgLabel = $("<label>").css({ fontSize: "11px", color: "var(--red-ui-secondary-text-color,#888)", cursor: "pointer", marginBottom: "0" }).text("full msg");
             fullMsgWrap.append(fullMsgCheck).append(fullMsgLabel);
-            if (data.fullMsg) { fullMsgCheck.prop("checked", true); }
             row.append(labelIn).append(sep).append(valueWrap).append(fullMsgWrap);
             container.append(row);
 
@@ -605,6 +604,17 @@
             // typedInput wraps the input in a .red-ui-typedInput-container; round only the right corners
             // so it visually connects to the separator on the left
             valueIn.typedInput("widget").css({ borderRadius: "0 3px 3px 0" });
+
+            function updateFullMsgVisibility() {
+              var t = valueIn.typedInput("type");
+              if (t === "json" || t === "jsonata") {
+                fullMsgWrap.css("display", "flex");
+              } else {
+                fullMsgWrap.hide();
+                fullMsgCheck.prop("checked", false);
+              }
+            }
+            valueIn.on("change", updateFullMsgVisibility);
 
             if (data.valueType) {
               valueIn.typedInput("type", data.valueType);
@@ -615,6 +625,8 @@
                 : String(data.value);
               valueIn.typedInput("value", stored);
             }
+            updateFullMsgVisibility();
+            if (data.fullMsg) { fullMsgCheck.prop("checked", true); }
           },
           removable: true,
           sortable: true,
