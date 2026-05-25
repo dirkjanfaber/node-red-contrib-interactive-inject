@@ -9,6 +9,7 @@ interface PresetItem {
   label: string;
   value: unknown;
   valueType?: string;
+  fullMsg?: boolean;
 }
 
 interface InteractiveInjectConfig extends NodeDef {
@@ -19,6 +20,7 @@ interface InteractiveInjectConfig extends NodeDef {
   defaultValue?: number;
   currentValue?: number;
   topic?: string;
+  outputProperty?: string;
   presets?: PresetItem[];
 }
 
@@ -29,6 +31,7 @@ interface InteractiveInjectNode extends Node {
   maxValue: number;
   step: number;
   topic: string;
+  outputProperty: string;
   presets: PresetItem[];
 }
 
@@ -74,7 +77,11 @@ function interactiveInjectModule(RED: NodeAPI): void {
           node.currentValue = clamp(v, node.minValue, node.maxValue);
         }
       }
-      node.send({ payload: node.currentValue, topic: node.topic });
+      const msg: Record<string, unknown> = { topic: node.topic };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (RED.util as any).setMessageProperty(msg, node.outputProperty, node.currentValue);
+      node.send(msg);
+      node.status({ fill: 'green', shape: 'dot', text: String(node.currentValue) });
       res.json({ value: node.currentValue });
     }
   );
@@ -102,7 +109,17 @@ function interactiveInjectModule(RED: NodeAPI): void {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (RED.util as any).evaluateNodeProperty(rawValue, valueType, node, { label: preset.label }, (err: Error | null, result: unknown) => {
         if (err) { res.status(500).send(String(err)); return; }
-        node.send({ payload: result, topic: node.topic, label: preset.label });
+        let msg: Record<string, unknown>;
+        if (preset.fullMsg && typeof result === 'object' && result !== null) {
+          msg = result as Record<string, unknown>;
+        } else {
+          msg = { topic: node.topic, label: preset.label };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (RED.util as any).setMessageProperty(msg, node.outputProperty, result);
+        }
+        node.send(msg);
+        const displayVal = typeof result === 'object' ? JSON.stringify(result) : String(result);
+        node.status({ fill: 'green', shape: 'dot', text: preset.label + ': ' + displayVal.slice(0, 30) });
         res.json({ label: preset.label, value: result });
       });
     }
@@ -119,6 +136,7 @@ function interactiveInjectModule(RED: NodeAPI): void {
     this.maxValue = config.maxValue ?? 100;
     this.step = config.step ?? 1;
     this.topic = config.topic ?? '';
+    this.outputProperty = config.outputProperty ?? 'payload';
     this.presets = config.presets ?? [];
     // Prefer the persisted slider position; fall back to the configured default.
     this.currentValue = clamp(

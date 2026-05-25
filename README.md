@@ -8,8 +8,13 @@ A Node-RED node that renders an interactive widget **directly on the editor canv
 
 - Two modes selectable per node: **Slider** and **Preset buttons**
 - **Slider mode** — inline `<input type="range">` embedded in the node body; drag the thumb or click the number and type directly; press **Enter** to commit or **Escape** to cancel
-- **Preset buttons mode** — configurable buttons rendered on the canvas; each button has a label and an arbitrary typed value (string, number, boolean, JSON, …)
-- **Inject on release** (slider mode) — automatically sends `msg.payload` when the thumb is released (can be disabled)
+- **Preset buttons mode** — configurable buttons rendered on the canvas; each button has a label and an arbitrary typed value (string, number, boolean, JSON, JSONata, …); hovering a button previews its value before you click
+- **Configurable output property** — write the injected value to any message property (default: `msg.payload`), including nested paths such as `msg.data.value`
+- **Full message output** (preset buttons) — optionally send the evaluated result as the entire `msg` object instead of a single property
+- **Node status indicator** — last injected value shown below the node after each injection
+- **Auto-label presets** — if a preset label is left blank, the value string is used as the label automatically
+- **Inject on release** (slider mode) — automatically sends the value when the thumb is released (can be disabled)
+- **Auto-collapse** — optional: widget collapses to normal node height after 3 s of inactivity, expands on hover
 - Left-side inject button for manual triggering, like the built-in Inject node
 - Last value/selection persisted to `flows.json` — survives deploy and restart
 - Configurable label and topic for both modes
@@ -38,15 +43,16 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 
 **Preset buttons mode**
 
-- Add one or more presets in the edit panel — give each a **label** and a **value** (any supported type).
-- The buttons appear directly on the canvas; click one to inject its value immediately.
+- Add one or more presets in the edit panel — give each a **label** and a **value** (any supported type). If you leave the label blank it defaults to the value string.
+- The buttons appear directly on the canvas; hover a button to preview its value, click to inject.
 - The last clicked preset is highlighted and re-injected when the left-side button is pressed.
+- Tick **full msg** on a preset to send the evaluated result as the entire message object (useful with JSON/JSONata presets that define the full message structure).
 
 ### Output
 
 | Property | Type | Description |
 |---|---|---|
-| `msg.payload` | any | The current slider value, or the value of the clicked preset button |
+| _(configured property)_ | any | The injected value, written to the property set in the **Property** field (default: `msg.payload`) |
 | `msg.topic` | `string` | The topic configured in the edit panel (empty string if not set) |
 | `msg.label` | `string` | _(Preset buttons mode only)_ The label of the clicked button |
 
@@ -56,8 +62,9 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 
 | Property | Default | Description |
 |---|---|---|
-| Mode | `Slider` | Choose between *Slider* and *Preset buttons* |
 | Topic | _(empty)_ | Sets `msg.topic` on every injected message |
+| Property | `payload` | The message property to write the injected value to (any path, e.g. `data.value`) |
+| Mode | `Slider` | Choose between *Slider* and *Preset buttons* |
 
 ### Slider mode
 
@@ -73,9 +80,15 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 
 | Property | Description |
 |---|---|
-| Presets | Ordered list of buttons. Each entry has a **Label** (shown on the button) and a **Value** with a type selector (string, number, boolean, JSON object, etc.) |
+| Presets | Ordered list of buttons. Each entry has a **Label** (shown on the button; auto-filled from the value if left blank), a **Value** with a type selector (string, number, boolean, JSON, JSONata, …), and an optional **full msg** toggle |
 
-### Using the label in a JSONata preset value
+### Widget behaviour
+
+| Property | Default | Description |
+|---|---|---|
+| Auto-collapse | `false` | When enabled, the widget collapses to normal node height 3 s after the cursor leaves the node, and re-expands immediately on hover |
+
+## Using the label in a JSONata preset value
 
 When the value type is set to **J: expression** (JSONata), the button's label is available as the variable `label`. This lets you encode a parameter directly in the button name and reference it in the expression without duplication.
 

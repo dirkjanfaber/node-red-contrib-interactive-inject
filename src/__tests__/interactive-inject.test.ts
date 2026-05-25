@@ -370,4 +370,140 @@ describe('interactive-inject node', () => {
         .expect(404);
     });
   });
+
+  describe('configurable output property', () => {
+    it('POST /inject sends to msg.payload by default (no outputProperty configured)', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({ currentValue: 10 }));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+      await helper.request().post('/interactive-inject/n1/inject').send({}).expect(200);
+      const msg = await msgPromise;
+      expect(msg.payload).toBe(10);
+    });
+
+    it('POST /inject sends to configured outputProperty instead of payload', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({ outputProperty: 'url', currentValue: 42 }));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+      await helper.request().post('/interactive-inject/n1/inject').send({}).expect(200);
+      const msg = await msgPromise;
+      expect(msg.url).toBe(42);
+      expect(msg.payload).toBeUndefined();
+    });
+
+    it('POST /inject supports a nested property path', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({ outputProperty: 'data.value', currentValue: 7 }));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+      await helper.request().post('/interactive-inject/n1/inject').send({}).expect(200);
+      const msg = await msgPromise;
+      expect((msg.data as Record<string, unknown>).value).toBe(7);
+    });
+
+    it('POST /preset sends to configured outputProperty instead of payload', async () => {
+      const flow = [
+        {
+          id: 'n1', type: 'interactive-inject', mode: 'presets',
+          outputProperty: 'cmd', topic: '',
+          presets: [{ label: 'On', value: 'on', valueType: 'str' }],
+          wires: [['n2']],
+        },
+        { id: 'n2', type: 'helper' },
+      ];
+      await helper.load(interactiveInjectNode, flow);
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+      await helper.request().post('/interactive-inject/n1/preset').send({ index: 0 }).expect(200);
+      const msg = await msgPromise;
+      expect(msg.cmd).toBe('on');
+      expect(msg.payload).toBeUndefined();
+    });
+  });
+
+  describe('node status', () => {
+    it('POST /inject sets node status showing the injected value', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({ currentValue: 42 }));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const n1 = helper.getNode('n1') as any;
+      const statusSpy = jest.spyOn(n1, 'status');
+      await helper.request().post('/interactive-inject/n1/inject').send({}).expect(200);
+      expect(statusSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ fill: 'green', shape: 'dot', text: expect.stringContaining('42') })
+      );
+    });
+
+    it('POST /preset sets node status showing the preset label', async () => {
+      const flow = [
+        {
+          id: 'n1', type: 'interactive-inject', mode: 'presets', topic: '',
+          presets: [{ label: 'Night', value: '10', valueType: 'num' }],
+          wires: [['n2']],
+        },
+        { id: 'n2', type: 'helper' },
+      ];
+      await helper.load(interactiveInjectNode, flow);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const n1 = helper.getNode('n1') as any;
+      const statusSpy = jest.spyOn(n1, 'status');
+      await helper.request().post('/interactive-inject/n1/preset').send({ index: 0 }).expect(200);
+      expect(statusSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ fill: 'green', shape: 'dot', text: expect.stringContaining('Night') })
+      );
+    });
+  });
+
+  describe('full message output for presets', () => {
+    it('POST /preset with fullMsg sends entire evaluated object as the message', async () => {
+      const flow = [
+        {
+          id: 'n1', type: 'interactive-inject', mode: 'presets', topic: '',
+          presets: [{ label: 'Scene', value: '{"payload":"on","brightness":255}', valueType: 'json', fullMsg: true }],
+          wires: [['n2']],
+        },
+        { id: 'n2', type: 'helper' },
+      ];
+      await helper.load(interactiveInjectNode, flow);
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+      await helper.request().post('/interactive-inject/n1/preset').send({ index: 0 }).expect(200);
+      const msg = await msgPromise;
+      expect(msg.payload).toBe('on');
+      expect(msg['brightness']).toBe(255);
+    });
+
+    it('POST /preset with fullMsg and JSONata can build a full message dynamically', async () => {
+      const flow = [
+        {
+          id: 'n1', type: 'interactive-inject', mode: 'presets', topic: '',
+          presets: [{ label: 'Dim', value: '{"payload": label, "level": 30}', valueType: 'jsonata', fullMsg: true }],
+          wires: [['n2']],
+        },
+        { id: 'n2', type: 'helper' },
+      ];
+      await helper.load(interactiveInjectNode, flow);
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+      await helper.request().post('/interactive-inject/n1/preset').send({ index: 0 }).expect(200);
+      const msg = await msgPromise;
+      expect(msg.payload).toBe('Dim');
+      expect(msg['level']).toBe(30);
+    });
+
+    it('POST /preset without fullMsg still uses outputProperty as before', async () => {
+      const flow = [
+        {
+          id: 'n1', type: 'interactive-inject', mode: 'presets', topic: '',
+          presets: [{ label: 'On', value: '1', valueType: 'num', fullMsg: false }],
+          wires: [['n2']],
+        },
+        { id: 'n2', type: 'helper' },
+      ];
+      await helper.load(interactiveInjectNode, flow);
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+      await helper.request().post('/interactive-inject/n1/preset').send({ index: 0 }).expect(200);
+      const msg = await msgPromise;
+      expect(msg.payload).toBe(1);
+    });
+  });
 });

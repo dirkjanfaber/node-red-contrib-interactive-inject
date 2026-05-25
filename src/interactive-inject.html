@@ -4,6 +4,37 @@
 
     var SLIDER_H = 56;
 
+    // Reposition node.status below the widget foreignObject.
+    // The status group is NOT always inside evt.el — in Node-RED 4.x it lives in
+    // the SVG group that D3 selects by node.id. We search both locations and
+    // observe both with a MutationObserver + a setInterval fallback.
+    // __nriY__ on the DOM element tracks what y we wrote, preventing double-shifts
+    // when renderWidget re-runs while the status is already repositioned.
+    function setupStatusReposition(el, foH) {
+      if (el.__statusObs__) { el.__statusObs__.disconnect(); }
+      if (el.__statusInt__) { clearInterval(el.__statusInt__); }
+
+      function fix() {
+        // Node-RED stores a direct reference to the status group on the node element.
+        // Class is "red-ui-flow-node-status-group"; the transform is translate(x, h+3).
+        var sg = el.__statusGroup__ || el.querySelector(".red-ui-flow-node-status-group");
+        if (!sg) { return; }
+        var cur = sg.getAttribute("transform") || "";
+        var mx = cur.match(/translate\s*\(\s*([^,\s]+)[,\s]+([^)\s]+)/);
+        if (!mx) { return; }
+        var x = parseFloat(mx[1]);
+        var y = parseFloat(mx[2]);
+        if (sg.__nriY__ !== undefined && Math.abs(y - sg.__nriY__) < 0.5) { return; }
+        sg.__nriY__ = y + foH;
+        sg.setAttribute("transform", "translate(" + x + "," + sg.__nriY__ + ")");
+      }
+
+      fix();
+      el.__statusObs__ = new MutationObserver(fix);
+      el.__statusObs__.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["transform", "style"] });
+      el.__statusInt__ = setInterval(fix, 500);
+    }
+
     // Always update style content so upgrades are reflected without a hard refresh
     var nriStyle = document.getElementById("nri-style") || (function () {
       var el = document.createElement("style");
@@ -17,16 +48,78 @@
       ".nri-val:focus{outline:2px solid #4aa3df;outline-offset:1px;border-radius:3px}",
     ].join("");
 
-    function renderSlider(el, node) {
-      if (el.__mainRect__) {
-        el.__mainRect__.setAttribute("height", (node.h || 30) + SLIDER_H);
+    // Auto-collapse: hides the widget 3s after the cursor leaves the node;
+    // expands immediately when the cursor re-enters.
+    // __nriCollapsed__ on the element persists the state across re-renders so that
+    // Node-RED redrawing the node (e.g. on canvas click) does not reset it to expanded.
+    function setupAutoCollapse(el, node, nodeH, foH) {
+      if (el.__nriColTimer__)  { clearTimeout(el.__nriColTimer__); el.__nriColTimer__ = null; }
+      if (el.__nriOnEnter__)   { el.removeEventListener("mouseenter", el.__nriOnEnter__); el.__nriOnEnter__ = null; }
+      if (el.__nriOnLeave__)   { el.removeEventListener("mouseleave", el.__nriOnLeave__); el.__nriOnLeave__ = null; }
+      if (!node.autoCollapse)  { el.__nriCollapsed__ = false; return; }
+
+      var nodeW = Math.max(node.w || 100, 100);
+      var origW = node.w || 100;
+
+      function applyCollapsed(state) {
+        el.__nriCollapsed__ = state;
+        var fo = el.querySelector(".nri-fo");
+        if (state) {
+          if (fo) { fo.style.display = "none"; }
+          if (el.__mainRect__) {
+            el.__mainRect__.setAttribute("height", nodeH);
+            el.__mainRect__.setAttribute("width", origW);
+          }
+          if (el.__statusObs__) { el.__statusObs__.disconnect(); el.__statusObs__ = null; }
+          if (el.__statusInt__) { clearInterval(el.__statusInt__); el.__statusInt__ = null; }
+          var sg = el.__statusGroup__ || el.querySelector(".red-ui-flow-node-status-group");
+          if (sg && sg.__nriY__ !== undefined) {
+            var cur = sg.getAttribute("transform") || "";
+            var xm = cur.match(/translate\s*\(\s*([^,\s]+)/);
+            var sx = xm ? parseFloat(xm[1]) : 3;
+            delete sg.__nriY__;
+            sg.setAttribute("transform", "translate(" + sx + "," + (nodeH + 3) + ")");
+          }
+        } else {
+          if (fo) { fo.style.display = ""; }
+          if (el.__mainRect__) {
+            el.__mainRect__.setAttribute("height", nodeH + foH);
+            el.__mainRect__.setAttribute("width", nodeW);
+          }
+          setupStatusReposition(el, foH);
+        }
       }
+
+      // Re-render may have produced a visible fo even though we were collapsed —
+      // reapply the persisted state immediately.
+      if (el.__nriCollapsed__) { applyCollapsed(true); }
+
+      el.__nriOnEnter__ = function () {
+        clearTimeout(el.__nriColTimer__); el.__nriColTimer__ = null;
+        applyCollapsed(false);
+      };
+      el.__nriOnLeave__ = function () {
+        el.__nriColTimer__ = setTimeout(function () { applyCollapsed(true); }, 3000);
+      };
+      el.addEventListener("mouseenter", el.__nriOnEnter__);
+      el.addEventListener("mouseleave", el.__nriOnLeave__);
+      // Only start the initial countdown when not already collapsed
+      if (!el.__nriCollapsed__) {
+        el.__nriColTimer__ = setTimeout(function () { applyCollapsed(true); }, 3000);
+      }
+    }
+
+    function renderSlider(el, node) {
+      var nodeH = node.h || 30;
+      var nodeW = Math.max(node.w || 100, 100);
+      if (el.__mainRect__) {
+        el.__mainRect__.setAttribute("height", nodeH + SLIDER_H);
+        el.__mainRect__.setAttribute("width", nodeW);
+      }
+      setupStatusReposition(el, SLIDER_H);
 
       var old = el.querySelector(".nri-fo");
       if (old) { old.remove(); }
-
-      var nodeW = node.w || 100;
-      var nodeH = node.h || 30;
 
       var initVal = node.currentValue !== undefined
         ? node.currentValue
@@ -99,15 +192,73 @@
         persistValue(v);
       }
 
+      // Safari miscalculates range-input values inside SVG foreignObject (wrong
+      // coordinate space). We bypass the native slider entirely:
+      //  • pointerdown on slider: preventDefault (stops Safari's broken calc +
+      //    suppresses synthetic mouse events) then setPointerCapture on wrap — a
+      //    plain div, because Safari's pointer capture is unreliable on form elements.
+      //  • pointermove / pointerup on wrap: compute value from e.clientX vs
+      //    slider.getBoundingClientRect(), which is always in client coordinates.
+      var dragging = false;
+
+      function sliderValueFromPointer(clientX) {
+        var rect = slider.getBoundingClientRect();
+        var min = parseFloat(slider.min);
+        var max = parseFloat(slider.max);
+        var step = parseFloat(slider.step) || 1;
+        var pct = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+        var raw = min + pct * (max - min);
+        var stepped = parseFloat((Math.round((raw - min) / step) * step + min).toPrecision(10));
+        return Math.min(Math.max(stepped, min), max);
+      }
+
+      function applySliderValue(v) {
+        slider.value = String(v);
+        valueDisplay.value = String(v);
+        persistValue(v);
+      }
+
+      slider.addEventListener("pointerdown", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        wrap.setPointerCapture(e.pointerId);
+        dragging = true;
+        applySliderValue(sliderValueFromPointer(e.clientX));
+      });
+
+      wrap.addEventListener("pointermove", function (e) {
+        if (!dragging) { return; }
+        applySliderValue(sliderValueFromPointer(e.clientX));
+      });
+
+      wrap.addEventListener("pointerup", function (e) {
+        if (!dragging) { return; }
+        dragging = false;
+        var v = sliderValueFromPointer(e.clientX);
+        applySliderValue(v);
+        if (node.injectOnRelease !== false) {
+          $.ajax({
+            url: "interactive-inject/" + node.id + "/inject",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ value: v }),
+          });
+        }
+      });
+
+      wrap.addEventListener("pointercancel", function () { dragging = false; });
+
+      // Keyboard navigation (arrow keys) still fires native input/change events
+      // because preventDefault on pointerdown does not affect keyboard events.
       slider.addEventListener("input", function () {
+        if (dragging) { return; }
         var v = parseFloat(this.value);
         valueDisplay.value = String(v);
         persistValue(v);
       });
 
-      // Fire inject when the thumb is released (change fires once on commit, not on every move)
       slider.addEventListener("change", function () {
-        if (node.injectOnRelease === false) { return; }
+        if (dragging || node.injectOnRelease === false) { return; }
         $.ajax({
           url: "interactive-inject/" + node.id + "/inject",
           type: "POST",
@@ -115,10 +266,6 @@
           data: JSON.stringify({ value: parseFloat(this.value) }),
         });
       });
-
-      // Prevent canvas drag from stealing pointer events while the slider is active
-      slider.addEventListener("mousedown", function (e) { e.stopPropagation(); });
-      slider.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
 
       // Stop all pointer events on the foreignObject so Node-RED's canvas click handler
       // never fires (which would select the node and tear down the foreignObject).
@@ -154,13 +301,14 @@
       wrap.appendChild(slider);
       fo.appendChild(wrap);
       el.appendChild(fo);
+      setupAutoCollapse(el, node, nodeH, SLIDER_H);
     }
 
     function renderPresets(el, node) {
       var old = el.querySelector(".nri-fo");
       if (old) { old.remove(); }
 
-      var nodeW = node.w || 100;
+      var nodeW = Math.max(node.w || 100, 100);
       var nodeH = node.h || 30;
       var presets = node.presets || [];
 
@@ -180,7 +328,9 @@
 
       if (el.__mainRect__) {
         el.__mainRect__.setAttribute("height", nodeH + foH);
+        el.__mainRect__.setAttribute("width", nodeW);
       }
+      setupStatusReposition(el, foH);
 
       var fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
       fo.setAttribute("class", "nri-fo");
@@ -275,7 +425,7 @@
               statusDiv.textContent = (presets[idx].label || String(idx + 1)) + ": " + fmtPreset(presets[idx]);
             };
           })(i));
-          btn.addEventListener("mouseleave", function () { statusDiv.textContent = node._lastStatusText || ""; });
+          btn.addEventListener("mouseleave", function () { statusDiv.textContent = ""; });
           btn.addEventListener("mousedown", function (e) { e.stopPropagation(); });
           btn.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
           btn.addEventListener("click", (function (idx) {
@@ -287,10 +437,6 @@
                 type: "POST",
                 contentType: "application/json",
                 data: JSON.stringify({ index: idx }),
-                success: function (resp) {
-                  node._lastStatusText = (resp.label || String(idx + 1)) + ": " + fmtVal(resp.value);
-                  statusDiv.textContent = node._lastStatusText;
-                },
               });
             };
           })(i));
@@ -298,12 +444,9 @@
           btnRow.appendChild(btn);
         });
 
-        // Restore selection and last-inject status across redraws
+        // Restore button selection across redraws
         if (typeof node.lastPresetIndex === "number" && node.lastPresetIndex < presets.length) {
           applySelection(node.lastPresetIndex);
-        }
-        if (node._lastStatusText) {
-          statusDiv.textContent = node._lastStatusText;
         }
 
         wrap.appendChild(btnRow);
@@ -316,6 +459,7 @@
 
       fo.appendChild(wrap);
       el.appendChild(fo);
+      setupAutoCollapse(el, node, nodeH, foH);
     }
 
     function renderWidget(el, node) {
@@ -332,6 +476,7 @@
       defaults: {
         name:            { value: "" },
         topic:           { value: "" },
+        outputProperty:  { value: "payload" },
         mode:            { value: "slider" },
         minValue:        { value: 0,   validate: RED.validators.number() },
         maxValue:        { value: 100, validate: RED.validators.number() },
@@ -339,6 +484,7 @@
         defaultValue:    { value: 50,  validate: RED.validators.number() },
         currentValue:    { value: undefined },
         injectOnRelease: { value: true },
+        autoCollapse:    { value: false },
         presets:         { value: [] },
       },
       inputs: 0,
@@ -417,18 +563,21 @@
         updateModeVisibility();
 
         $("#node-input-topic").val(this.topic || "");
+        $("#node-input-outputProperty").typedInput({ types: ["msg"] });
+        $("#node-input-outputProperty").typedInput("value", this.outputProperty || "payload");
         $("#node-input-minValue").val(this.minValue);
         $("#node-input-maxValue").val(this.maxValue);
         $("#node-input-step").val(this.step);
         $("#node-input-defaultValue").val(this.defaultValue);
         $("#node-input-injectOnRelease").prop("checked", this.injectOnRelease !== false);
+        $("#node-input-autoCollapse").prop("checked", this.autoCollapse === true);
 
         $("#node-input-presets-list").editableList({
           addItem: function (container, i, data) {
             var row = $("<div>").css({ display: "flex", gap: "0", alignItems: "center", width: "100%" });
             var labelIn = $('<input type="text">')
               .addClass("nri-preset-label")
-              .attr("placeholder", "Button label")
+              .attr("placeholder", "auto")
               .css({ width: "90px", flex: "none", borderRadius: "3px 0 0 3px", borderRight: "none", boxSizing: "border-box" })
               .val(data.label || "");
             var sep = $('<span>').css({
@@ -444,7 +593,12 @@
             var valueWrap = $("<div>").css({ flex: "1", minWidth: "0" });
             var valueIn = $('<input type="text">').addClass("nri-preset-value").css({ width: "100%", boxSizing: "border-box" });
             valueWrap.append(valueIn);
-            row.append(labelIn).append(sep).append(valueWrap);
+            var fullMsgWrap = $("<div>").css({ display: "flex", alignItems: "center", gap: "3px", marginLeft: "6px", flex: "none", whiteSpace: "nowrap" });
+            var fullMsgCheck = $('<input type="checkbox">').addClass("nri-preset-fullmsg").attr("title", "Send as full message object");
+            var fullMsgLabel = $("<label>").css({ fontSize: "11px", color: "var(--red-ui-secondary-text-color,#888)", cursor: "pointer", marginBottom: "0" }).text("full msg");
+            fullMsgWrap.append(fullMsgCheck).append(fullMsgLabel);
+            if (data.fullMsg) { fullMsgCheck.prop("checked", true); }
+            row.append(labelIn).append(sep).append(valueWrap).append(fullMsgWrap);
             container.append(row);
 
             valueIn.typedInput({ types: ["flow", "global", "str", "num", "bool", "json", "bin", "date", "jsonata", "env"] });
@@ -475,6 +629,7 @@
       oneditsave: function () {
         this.mode            = $("#node-input-mode").val();
         this.topic           = $("#node-input-topic").val();
+        this.outputProperty  = $("#node-input-outputProperty").typedInput("value") || "payload";
         this.minValue        = parseFloat($("#node-input-minValue").val());
         this.maxValue        = parseFloat($("#node-input-maxValue").val());
         this.step            = parseFloat($("#node-input-step").val());
@@ -484,15 +639,20 @@
           this.maxValue
         );
         this.injectOnRelease = $("#node-input-injectOnRelease").is(":checked");
+        this.autoCollapse    = $("#node-input-autoCollapse").is(":checked");
         this.currentValue    = this.defaultValue;
 
         var presets = [];
         $("#node-input-presets-list").editableList("items").each(function () {
           var labelIn = $(this).find(".nri-preset-label");
           var valueIn = $(this).find(".nri-preset-value");
+          var fullMsg = $(this).find(".nri-preset-fullmsg").is(":checked");
           var typeStr = valueIn.typedInput("type");
           var rawVal  = valueIn.typedInput("value");
-          presets.push({ label: String(labelIn.val() || (presets.length + 1)), value: rawVal, valueType: typeStr });
+          var label   = String(labelIn.val() || rawVal || (presets.length + 1));
+          var item = { label: label, value: rawVal, valueType: typeStr };
+          if (fullMsg) { item.fullMsg = true; }
+          presets.push(item);
         });
         this.presets = presets;
       },
@@ -518,6 +678,10 @@
   <div class="form-row">
     <label for="node-input-topic"><i class="fa fa-tasks"></i> Topic</label>
     <input type="text" id="node-input-topic" placeholder="msg.topic (optional)">
+  </div>
+  <div class="form-row">
+    <label for="node-input-outputProperty"><i class="fa fa-sign-out"></i> Property</label>
+    <input type="text" id="node-input-outputProperty" style="width:70%">
   </div>
   <div class="form-row">
     <label for="node-input-mode"><i class="fa fa-th-large"></i> Mode</label>
@@ -561,25 +725,35 @@
       <ol id="node-input-presets-list"></ol>
     </div>
   </div>
+  <div class="form-row">
+    <label for="node-input-autoCollapse"><i class="fa fa-compress"></i> Auto-collapse</label>
+    <input type="checkbox" id="node-input-autoCollapse" style="width:auto;margin-right:6px">
+    <span style="font-size:11px;color:var(--red-ui-secondary-text-color,#888)">collapse after 3s of inactivity, expand on hover</span>
+  </div>
 </script>
 
 <script type="text/html" data-help-name="interactive-inject">
-  <p>An inject node with an inline widget rendered directly on the Node-RED canvas — either a numeric slider or a set of configurable preset buttons.</p>
+  <p>An inject node with an inline widget rendered directly on the Node-RED canvas — either a numeric slider or a set of configurable preset buttons. No dashboard required.</p>
   <h3>Modes</h3>
   <dl class="message-properties">
     <dt>Slider</dt>
-    <dd>Drag the range slider or type a value directly to pick a number. Releasing the slider (or pressing Enter) injects <code>msg.payload</code> as a number.</dd>
+    <dd>Drag the range slider or type a value directly to pick a number. Releasing the slider (or pressing <strong>Enter</strong>) injects the value. Press <strong>Escape</strong> to cancel a typed edit.</dd>
     <dt>Preset buttons</dt>
-    <dd>Each button is configured with a label and a value (string, number, boolean, or JSON). Clicking a button injects that value as <code>msg.payload</code>.</dd>
+    <dd>Each button is configured with a label and a typed value (string, number, boolean, JSON, JSONata, …). Hovering a button previews its value; clicking injects it. If a label is left blank it defaults to the value string.</dd>
   </dl>
   <h3>Outputs</h3>
   <dl class="message-properties">
     <dt>payload <span class="property-type">number | string | boolean | object</span></dt>
-    <dd>The current slider value, or the value of the clicked preset button.</dd>
+    <dd>The injected value, written to the property configured in the <em>Property</em> field (default: <code>msg.payload</code>).</dd>
     <dt>topic <span class="property-type">string</span></dt>
     <dd>The topic configured in the edit panel (empty string if not set).</dd>
+    <dt>label <span class="property-type">string</span></dt>
+    <dd><em>Preset buttons mode only.</em> The label of the clicked button. Also available as the variable <code>label</code> inside JSONata preset values.</dd>
   </dl>
   <h3>Details</h3>
-  <p>In <em>Slider</em> mode, drag the slider or click the value display and type a number, then press <strong>Enter</strong> to commit (or <strong>Escape</strong> to cancel). When <em>Inject on release</em> is enabled (default), releasing the slider or pressing Enter automatically sends the value. The button on the left of the node injects the current value manually at any time.</p>
-  <p>In <em>Preset buttons</em> mode, configure any number of buttons in the edit panel. Each button has a label (shown on the canvas) and a value that is sent as <code>msg.payload</code> when clicked. Values can be strings, numbers, booleans, or JSON objects/arrays.</p>
+  <p><strong>Configurable output property</strong> — by default the value is placed on <code>msg.payload</code>. Change the <em>Property</em> field to write to any message property, including nested paths such as <code>data.value</code>.</p>
+  <p><strong>Full message output</strong> (preset buttons) — tick the <em>full msg</em> checkbox on a preset to send the evaluated result as the entire message object instead of a single property. The value type should be JSON or JSONata returning an object.</p>
+  <p><strong>Node status</strong> — after each injection the last injected value is shown below the node using the standard Node-RED status indicator.</p>
+  <p><strong>Auto-collapse</strong> — when enabled in the edit panel, the widget collapses to the normal node height 3 seconds after the cursor leaves the node, and re-expands immediately on hover.</p>
+  <p>The left-side button injects the current slider value or the last-selected preset at any time, identical to the built-in Inject node.</p>
 </script>
