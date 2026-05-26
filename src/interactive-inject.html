@@ -312,13 +312,30 @@
       var nodeH = node.h || 30;
       var presets = node.presets || [];
 
+      function fmtVal(v) {
+        if (v === null || v === undefined) { return ""; }
+        var s = typeof v === "object" ? JSON.stringify(v) : String(v);
+        return s.length > 28 ? s.slice(0, 28) + "…" : s;
+      }
+      function fmtPreset(p) {
+        switch (p.valueType) {
+          case "date":    return "timestamp";
+          case "bin":     return "buffer";
+          case "env":     return "$" + (p.value || "");
+          case "flow":    return "flow." + (p.value || "");
+          case "global":  return "global." + (p.value || "");
+          case "jsonata": { var e = String(p.value || ""); return "ƒ(" + (e.length > 18 ? e.slice(0, 18) + "…" : e) + ")"; }
+          default:        return fmtVal(p.value);
+        }
+      }
+
       // Estimate rows needed so the widget grows to fit wrapped buttons
       var availW = nodeW - 14;
       var rows = 1;
       if (presets.length > 0) {
         var rowX = 0;
         presets.forEach(function (p, i) {
-          var bw = Math.max(26, (p.label || String(i + 1)).length * 7 + 14);
+          var bw = Math.max(26, (p.label || fmtPreset(p)).length * 7 + 14);
           if (i === 0) { rowX = bw; }
           else if (rowX + 3 + bw > availW) { rows++; rowX = bw; }
           else { rowX += 3 + bw; }
@@ -364,24 +381,6 @@
           "font-style:italic",
         ].join(";");
 
-        function fmtVal(v) {
-          if (v === null || v === undefined) { return ""; }
-          var s = typeof v === "object" ? JSON.stringify(v) : String(v);
-          return s.length > 28 ? s.slice(0, 28) + "…" : s;
-        }
-
-        function fmtPreset(p) {
-          switch (p.valueType) {
-            case "date":    return "timestamp";
-            case "bin":     return "buffer";
-            case "env":     return "$" + (p.value || "");
-            case "flow":    return "flow." + (p.value || "");
-            case "global":  return "global." + (p.value || "");
-            case "jsonata": { var e = String(p.value || ""); return "ƒ(" + (e.length > 18 ? e.slice(0, 18) + "…" : e) + ")"; }
-            default:        return fmtVal(p.value);
-          }
-        }
-
         var buttons = [];
 
         function applySelection(selectedIdx) {
@@ -399,7 +398,7 @@
 
         presets.forEach(function (preset, i) {
           var btn = document.createElement("button");
-          btn.textContent = preset.label || String(i + 1);
+          btn.textContent = preset.label || fmtPreset(preset);
           btn.style.cssText = [
             "font-size:11px",
             "font-weight:600",
@@ -422,7 +421,10 @@
 
           btn.addEventListener("mouseenter", (function (idx) {
             return function () {
-              statusDiv.textContent = (presets[idx].label || String(idx + 1)) + ": " + fmtPreset(presets[idx]);
+              var _p = presets[idx];
+              statusDiv.textContent = _p.label
+                ? _p.label + ": " + fmtPreset(_p)
+                : fmtPreset(_p);
             };
           })(i));
           btn.addEventListener("mouseleave", function () { statusDiv.textContent = ""; });
@@ -491,7 +493,7 @@
       outputs: 1,
       icon: "inject.svg",
       label: function () {
-        return this.name || "interactive inject";
+        return this.name || "";
       },
       labelStyle: function () {
         return this.name ? "node_label_italic" : "";
@@ -661,7 +663,7 @@
           var fullMsg = $(this).find(".nri-preset-fullmsg").is(":checked");
           var typeStr = valueIn.typedInput("type");
           var rawVal  = valueIn.typedInput("value");
-          var label   = String(labelIn.val() || rawVal || (presets.length + 1));
+          var label   = String(labelIn.val());
           var item = { label: label, value: rawVal, valueType: typeStr };
           if (fullMsg) { item.fullMsg = true; }
           presets.push(item);

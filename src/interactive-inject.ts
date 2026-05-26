@@ -106,20 +106,32 @@ function interactiveInjectModule(RED: NodeAPI): void {
         ? JSON.stringify(preset.value)
         : String(preset.value ?? '');
       const valueType = preset.valueType || 'str';
+      const effectiveLabel = preset.label || (
+        valueType === 'flow'   ? 'flow.'   + rawValue :
+        valueType === 'global' ? 'global.' + rawValue :
+        rawValue
+      );
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (RED.util as any).evaluateNodeProperty(rawValue, valueType, node, { label: preset.label }, (err: Error | null, result: unknown) => {
+      (RED.util as any).evaluateNodeProperty(rawValue, valueType, node, { label: effectiveLabel }, (err: Error | null, result: unknown) => {
         if (err) { res.status(500).send(String(err)); return; }
         let msg: Record<string, unknown>;
         if (preset.fullMsg && typeof result === 'object' && result !== null) {
           msg = result as Record<string, unknown>;
         } else {
-          msg = { topic: node.topic, label: preset.label };
+          msg = { topic: node.topic, label: effectiveLabel };
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (RED.util as any).setMessageProperty(msg, node.outputProperty, result);
         }
         node.send(msg);
-        const displayVal = typeof result === 'object' ? JSON.stringify(result) : String(result);
-        node.status({ fill: 'green', shape: 'dot', text: preset.label + ': ' + displayVal.slice(0, 30) });
+        let displayVal: string;
+        if (valueType === 'flow') {
+          displayVal = 'flow.' + rawValue;
+        } else if (valueType === 'global') {
+          displayVal = 'global.' + rawValue;
+        } else {
+          displayVal = typeof result === 'object' ? JSON.stringify(result) : String(result);
+        }
+        node.status({ fill: 'green', shape: 'dot', text: effectiveLabel + ': ' + displayVal.slice(0, 30) });
         res.json({ label: preset.label, value: result });
       });
     }
