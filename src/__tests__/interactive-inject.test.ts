@@ -420,6 +420,47 @@ describe('interactive-inject node', () => {
     });
   });
 
+  describe('sliderBehaviour config', () => {
+    it('loads with sliderBehaviour "release"', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({ sliderBehaviour: 'release' }));
+      expect(helper.getNode('n1')).toBeDefined();
+    });
+
+    it('loads with sliderBehaviour "drag"', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({ sliderBehaviour: 'drag' }));
+      expect(helper.getNode('n1')).toBeDefined();
+    });
+
+    it('loads with sliderBehaviour "none"', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({ sliderBehaviour: 'none' }));
+      expect(helper.getNode('n1')).toBeDefined();
+    });
+
+    it('backward compat: loads with legacy injectOnRelease: false and still injects', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({ injectOnRelease: false, currentValue: 55 }));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+      await helper.request()
+        .post('/interactive-inject/n1/inject')
+        .send({})
+        .expect(200);
+      const msg = await msgPromise;
+      expect(msg.payload).toBe(55);
+    });
+
+    it('backward compat: loads with legacy injectOnRelease: true and still injects', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({ injectOnRelease: true, currentValue: 33 }));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+      await helper.request()
+        .post('/interactive-inject/n1/inject')
+        .send({})
+        .expect(200);
+      const msg = await msgPromise;
+      expect(msg.payload).toBe(33);
+    });
+  });
+
   describe('node status', () => {
     it('POST /inject sets node status showing the injected value', async () => {
       await helper.load(interactiveInjectNode, BASE_FLOW({ currentValue: 42 }));

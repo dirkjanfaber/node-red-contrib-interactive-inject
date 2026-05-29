@@ -1,3 +1,23 @@
+<style>
+  #node-input-outputProperty { width: 70%; }
+  #node-input-mode           { width: auto; }
+  #node-input-autoCollapse   { width: auto; margin-right: 6px; }
+
+  .nri-num-input { width: 120px; }
+
+  .nri-section-row   { margin-bottom: 6px; align-items: center; }
+  .nri-section-label { color: var(--red-ui-secondary-text-color, #888); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; width: auto; min-width: 0; margin-bottom: 0; }
+  .nri-section-label i { margin-right: 5px; }
+
+  .nri-send-row { align-items: flex-start; }
+  .nri-radio-group { display: inline-flex; flex-direction: column; gap: 4px; padding-top: 2px; }
+  .nri-radio-group > label { font-weight: normal; margin-bottom: 0; white-space: nowrap; }
+  .nri-radio-group input[type="radio"] { width: auto; margin-right: 4px; }
+
+  .nri-presets-row { margin-bottom: 8px; }
+  .nri-hint { font-size: 11px; color: var(--red-ui-secondary-text-color, #888); }
+</style>
+
 <script type="text/javascript">
   (function () {
     "use strict";
@@ -199,7 +219,9 @@
       //    plain div, because Safari's pointer capture is unreliable on form elements.
       //  • pointermove / pointerup on wrap: compute value from e.clientX vs
       //    slider.getBoundingClientRect(), which is always in client coordinates.
+      var sliderBehaviour = node.sliderBehaviour || (node.injectOnRelease === false ? "none" : "release");
       var dragging = false;
+      var lastInjectedValue = initVal;
 
       function sliderValueFromPointer(clientX) {
         var rect = slider.getBoundingClientRect();
@@ -218,17 +240,31 @@
         persistValue(v);
       }
 
+      function injectValue(v) {
+        lastInjectedValue = v;
+        $.ajax({
+          url: "interactive-inject/" + node.id + "/inject",
+          type: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({ value: v }),
+        });
+      }
+
       slider.addEventListener("pointerdown", function (e) {
         e.stopPropagation();
         e.preventDefault();
         wrap.setPointerCapture(e.pointerId);
         dragging = true;
-        applySliderValue(sliderValueFromPointer(e.clientX));
+        var v = sliderValueFromPointer(e.clientX);
+        applySliderValue(v);
+        if (sliderBehaviour === "drag" && v !== lastInjectedValue) { injectValue(v); }
       });
 
       wrap.addEventListener("pointermove", function (e) {
         if (!dragging) { return; }
-        applySliderValue(sliderValueFromPointer(e.clientX));
+        var v = sliderValueFromPointer(e.clientX);
+        applySliderValue(v);
+        if (sliderBehaviour === "drag" && v !== lastInjectedValue) { injectValue(v); }
       });
 
       wrap.addEventListener("pointerup", function (e) {
@@ -236,14 +272,7 @@
         dragging = false;
         var v = sliderValueFromPointer(e.clientX);
         applySliderValue(v);
-        if (node.injectOnRelease !== false) {
-          $.ajax({
-            url: "interactive-inject/" + node.id + "/inject",
-            type: "POST",
-            contentType: "application/json",
-            data: JSON.stringify({ value: v }),
-          });
-        }
+        if (sliderBehaviour === "release") { injectValue(v); }
       });
 
       wrap.addEventListener("pointercancel", function () { dragging = false; });
@@ -258,13 +287,8 @@
       });
 
       slider.addEventListener("change", function () {
-        if (dragging || node.injectOnRelease === false) { return; }
-        $.ajax({
-          url: "interactive-inject/" + node.id + "/inject",
-          type: "POST",
-          contentType: "application/json",
-          data: JSON.stringify({ value: parseFloat(this.value) }),
-        });
+        if (dragging || sliderBehaviour === "none") { return; }
+        injectValue(parseFloat(this.value));
       });
 
       // Stop all pointer events on the foreignObject so Node-RED's canvas click handler
@@ -281,13 +305,8 @@
         e.stopPropagation();
         if (e.key === "Enter") {
           commitTyped();
-          if (node.injectOnRelease !== false) {
-            $.ajax({
-              url: "interactive-inject/" + node.id + "/inject",
-              type: "POST",
-              contentType: "application/json",
-              data: JSON.stringify({ value: parseFloat(valueDisplay.value) }),
-            });
+          if (sliderBehaviour !== "none") {
+            injectValue(parseFloat(valueDisplay.value));
           }
           this.blur();
         } else if (e.key === "Escape") {
@@ -485,6 +504,7 @@
         step:            { value: 1,   validate: RED.validators.number() },
         defaultValue:    { value: 50,  validate: RED.validators.number() },
         currentValue:    { value: undefined },
+        sliderBehaviour: { value: null },
         injectOnRelease: { value: true },
         autoCollapse:    { value: false },
         presets:         { value: [] },
@@ -571,7 +591,8 @@
         $("#node-input-maxValue").val(this.maxValue);
         $("#node-input-step").val(this.step);
         $("#node-input-defaultValue").val(this.defaultValue);
-        $("#node-input-injectOnRelease").prop("checked", this.injectOnRelease !== false);
+        var behaviour = node.sliderBehaviour || (node.injectOnRelease === false ? "none" : "release");
+        $("input[name='nri-slider-behaviour'][value='" + behaviour + "']").prop("checked", true);
         $("#node-input-autoCollapse").prop("checked", this.autoCollapse === true);
 
         $("#node-input-presets-list").editableList({
@@ -652,7 +673,7 @@
           Math.max(this.defaultValue, this.minValue),
           this.maxValue
         );
-        this.injectOnRelease = $("#node-input-injectOnRelease").is(":checked");
+        this.sliderBehaviour = $("input[name='nri-slider-behaviour']:checked").val() || "release";
         this.autoCollapse    = $("#node-input-autoCollapse").is(":checked");
         this.currentValue    = this.defaultValue;
 
@@ -695,54 +716,58 @@
   </div>
   <div class="form-row">
     <label for="node-input-outputProperty"><i class="fa fa-sign-out"></i> Property</label>
-    <input type="text" id="node-input-outputProperty" style="width:70%">
+    <input type="text" id="node-input-outputProperty">
   </div>
   <div class="form-row">
     <label for="node-input-mode"><i class="fa fa-th-large"></i> Mode</label>
-    <select id="node-input-mode" style="width:auto">
+    <select id="node-input-mode">
       <option value="slider">Slider</option>
       <option value="presets">Preset buttons</option>
     </select>
   </div>
 
   <div id="nri-slider-section">
-    <div class="form-row" style="margin-bottom:6px;align-items:center">
-      <label style="color:var(--red-ui-secondary-text-color,#888);font-size:11px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;width:auto;min-width:0;margin-bottom:0"><i class="fa fa-sliders" style="margin-right:5px"></i>Slider range</label>
+    <div class="form-row nri-section-row">
+      <label class="nri-section-label"><i class="fa fa-sliders"></i>Slider range</label>
     </div>
     <div class="form-row">
       <label for="node-input-minValue"><i class="fa fa-minus"></i> Min</label>
-      <input type="number" id="node-input-minValue" step="any" style="width:120px">
+      <input type="number" id="node-input-minValue" step="any" class="nri-num-input">
     </div>
     <div class="form-row">
       <label for="node-input-maxValue"><i class="fa fa-plus"></i> Max</label>
-      <input type="number" id="node-input-maxValue" step="any" style="width:120px">
+      <input type="number" id="node-input-maxValue" step="any" class="nri-num-input">
     </div>
     <div class="form-row">
       <label for="node-input-step"><i class="fa fa-arrows-h"></i> Step</label>
-      <input type="number" id="node-input-step" step="any" min="0" style="width:120px">
+      <input type="number" id="node-input-step" step="any" min="0" class="nri-num-input">
     </div>
     <div class="form-row">
       <label for="node-input-defaultValue"><i class="fa fa-sliders"></i> Default</label>
-      <input type="number" id="node-input-defaultValue" step="any" style="width:120px">
+      <input type="number" id="node-input-defaultValue" step="any" class="nri-num-input">
     </div>
-    <div class="form-row">
-      <label for="node-input-injectOnRelease"><i class="fa fa-paper-plane-o"></i> Inject on release</label>
-      <input type="checkbox" id="node-input-injectOnRelease" style="width:auto">
+    <div class="form-row nri-send-row">
+      <label><i class="fa fa-paper-plane-o"></i> Send</label>
+      <div class="nri-radio-group">
+        <label><input type="radio" name="nri-slider-behaviour" value="release">on release</label>
+        <label><input type="radio" name="nri-slider-behaviour" value="drag">while dragging (on change)</label>
+        <label><input type="radio" name="nri-slider-behaviour" value="none">never (button only)</label>
+      </div>
     </div>
   </div>
 
   <div id="nri-presets-section">
-    <div class="form-row" style="margin-bottom:6px;align-items:center">
-      <label style="color:var(--red-ui-secondary-text-color,#888);font-size:11px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;width:auto;min-width:0;margin-bottom:0"><i class="fa fa-th" style="margin-right:5px"></i>Preset buttons</label>
+    <div class="form-row nri-section-row">
+      <label class="nri-section-label"><i class="fa fa-th"></i>Preset buttons</label>
     </div>
-    <div class="form-row" style="margin-bottom:8px">
+    <div class="form-row nri-presets-row">
       <ol id="node-input-presets-list"></ol>
     </div>
   </div>
   <div class="form-row">
     <label for="node-input-autoCollapse"><i class="fa fa-compress"></i> Auto-collapse</label>
-    <input type="checkbox" id="node-input-autoCollapse" style="width:auto;margin-right:6px">
-    <span style="font-size:11px;color:var(--red-ui-secondary-text-color,#888)">collapse after 3s of inactivity, expand on hover</span>
+    <input type="checkbox" id="node-input-autoCollapse">
+    <span class="nri-hint">collapse after 3s of inactivity, expand on hover</span>
   </div>
 </script>
 
@@ -751,7 +776,7 @@
   <h3>Modes</h3>
   <dl class="message-properties">
     <dt>Slider</dt>
-    <dd>Drag the range slider or type a value directly to pick a number. Releasing the slider (or pressing <strong>Enter</strong>) injects the value. Press <strong>Escape</strong> to cancel a typed edit.</dd>
+    <dd>Drag the range slider or type a value directly to pick a number. The <em>Send</em> option controls when injection happens: <strong>on release</strong> injects once when you let go (or press <strong>Enter</strong>); <strong>while dragging</strong> injects continuously as the value changes during drag (and on Enter); <strong>never</strong> disables automatic injection so only the left-side button triggers it. Press <strong>Escape</strong> to cancel a typed edit.</dd>
     <dt>Preset buttons</dt>
     <dd>Each button is configured with a label and a typed value (string, number, boolean, JSON, JSONata, …). Hovering a button previews its value; clicking injects it. If a label is left blank it defaults to the value string.</dd>
   </dl>
