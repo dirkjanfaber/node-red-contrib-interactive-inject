@@ -13,7 +13,7 @@ A Node-RED node that renders an interactive widget **directly on the editor canv
 - **Full message output** (preset buttons) — optionally send the evaluated result as the entire `msg` object instead of a single property
 - **Node status indicator** — last injected value shown below the node after each injection
 - **Auto-label presets** — if a preset label is left blank, the value string is used as the label automatically
-- **Inject on release** (slider mode) — automatically sends the value when the thumb is released (can be disabled)
+- **Configurable send behaviour** (slider mode) — choose between injecting *on release*, *while dragging* (fires on every value change during drag), or *never* (button only)
 - **Auto-collapse** — optional: widget collapses to normal node height after 3 s of inactivity, expands on hover
 - Left-side inject button for manual triggering, like the built-in Inject node
 - Last value/selection persisted to `flows.json` — survives deploy and restart
@@ -38,7 +38,7 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 **Slider mode**
 
 - Drag the slider thumb to your desired value, or click the number display and type a value directly.
-- The value is injected automatically when you release the thumb or press **Enter** (if *Inject on release* is enabled, which is the default).
+- The **Send** option controls when injection happens: *on release* (default) injects once when you let go or press **Enter**; *while dragging* injects continuously as the value changes during a drag (and on **Enter**); *never* disables automatic injection so only the left-side button triggers it.
 - Click the button on the left side of the node to inject the current value manually at any time.
 
 **Preset buttons mode**
@@ -74,7 +74,7 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 | Max | `100` | Maximum slider value |
 | Step | `1` | Increment between positions (decimals supported, e.g. `0.1`) |
 | Default | `50` | Value on first load |
-| Inject on release | `true` | Send automatically when the thumb is released |
+| Send | `on release` | When to inject: *on release* — once when the thumb is released or Enter pressed; *while dragging* — on every value change during drag (and on Enter); *never* — button only |
 
 ### Preset buttons mode
 
