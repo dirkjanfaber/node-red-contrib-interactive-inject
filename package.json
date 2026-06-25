@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "@types/node": "^25.7.0",
+    "@types/node": "^26.0.1",
     "@types/node-red": "^1.3.4",
     "html-minifier-terser": "^7.2.0",
     "jest": "^30.4.2",
