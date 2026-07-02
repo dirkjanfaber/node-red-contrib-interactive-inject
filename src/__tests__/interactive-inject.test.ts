@@ -420,6 +420,109 @@ describe('interactive-inject node', () => {
     });
   });
 
+  describe('slider JSONata output', () => {
+    it('POST /inject evaluates a JSONata expression bound to $value', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({
+        currentValue: 55,
+        outputAsJsonata: true,
+        outputJsonata: '{ "/Soc": $value }',
+      }));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/inject')
+        .send({})
+        .expect(200);
+
+      const msg = await msgPromise;
+      expect(msg.payload).toEqual({ '/Soc': 55 });
+      expect(msg.topic).toBe('test-topic');
+    });
+
+    it('POST /inject writes the JSONata result to a custom outputProperty', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({
+        currentValue: 20,
+        outputProperty: 'data',
+        outputAsJsonata: true,
+        outputJsonata: '$value * 2',
+      }));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/inject')
+        .send({})
+        .expect(200);
+
+      const msg = await msgPromise;
+      expect(msg.data).toBe(40);
+      expect(msg.payload).toBeUndefined();
+    });
+
+    it('POST /inject with a fresh value from the request body reflects it in $value', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({
+        currentValue: 10,
+        outputAsJsonata: true,
+        outputJsonata: '$value',
+      }));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/inject')
+        .send({ value: 88 })
+        .expect(200);
+
+      const msg = await msgPromise;
+      expect(msg.payload).toBe(88);
+    });
+
+    it('POST /inject returns 400 when the JSONata expression is invalid', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({
+        currentValue: 10,
+        outputAsJsonata: true,
+        outputJsonata: '{ invalid jsonata !!',
+      }));
+      await helper.request()
+        .post('/interactive-inject/n1/inject')
+        .send({})
+        .expect(400);
+    });
+
+    it('sends the raw numeric value when outputAsJsonata is false (default)', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({ currentValue: 33 }));
+      const n2 = helper.getNode('n2');
+      const msgPromise = new Promise<Record<string, unknown>>(resolve => n2.on('input', resolve));
+
+      await helper.request()
+        .post('/interactive-inject/n1/inject')
+        .send({})
+        .expect(200);
+
+      const msg = await msgPromise;
+      expect(msg.payload).toBe(33);
+    });
+
+    it('POST /inject returns 400 when outputAsJsonata is enabled with a blank expression, instead of silently sending the raw value', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({
+        currentValue: 10,
+        outputAsJsonata: true,
+        outputJsonata: '',
+      }));
+      const n2 = helper.getNode('n2');
+      const inputSpy = jest.fn();
+      n2.on('input', inputSpy);
+
+      await helper.request()
+        .post('/interactive-inject/n1/inject')
+        .send({})
+        .expect(400);
+
+      expect(inputSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('sliderBehaviour config', () => {
     it('loads with sliderBehaviour "release"', async () => {
       await helper.load(interactiveInjectNode, BASE_FLOW({ sliderBehaviour: 'release' }));

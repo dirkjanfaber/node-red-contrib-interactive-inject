@@ -22,6 +22,8 @@ interface InteractiveInjectConfig extends NodeDef {
   topic?: string;
   outputProperty?: string;
   presets?: PresetItem[];
+  outputAsJsonata?: boolean;
+  outputJsonata?: string;
 }
 
 interface InteractiveInjectNode extends Node {
@@ -33,6 +35,8 @@ interface InteractiveInjectNode extends Node {
   topic: string;
   outputProperty: string;
   presets: PresetItem[];
+  outputAsJsonata: boolean;
+  outputJsonata: string;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -78,6 +82,34 @@ function interactiveInjectModule(RED: NodeAPI): void {
         }
       }
       const msg: Record<string, unknown> = { topic: node.topic };
+
+      if (node.mode === 'slider' && node.outputAsJsonata) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let expr: any;
+        try {
+          expr = (RED.util as any).prepareJSONataExpression(node.outputJsonata, node);
+          expr.assign('value', node.currentValue);
+        } catch (err) {
+          node.status({ fill: 'red', shape: 'ring', text: 'JSONata error' });
+          res.status(400).send(String(err));
+          return;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (RED.util as any).evaluateJSONataExpression(expr, msg, (err: Error | null, result: unknown) => {
+          if (err) {
+            node.status({ fill: 'red', shape: 'ring', text: 'JSONata error' });
+            res.status(400).send(String(err));
+            return;
+          }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (RED.util as any).setMessageProperty(msg, node.outputProperty, result);
+          node.send(msg);
+          node.status({ fill: 'green', shape: 'dot', text: String(node.currentValue) });
+          res.json({ value: node.currentValue });
+        });
+        return;
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (RED.util as any).setMessageProperty(msg, node.outputProperty, node.currentValue);
       node.send(msg);
@@ -150,6 +182,8 @@ function interactiveInjectModule(RED: NodeAPI): void {
     this.topic = config.topic ?? '';
     this.outputProperty = config.outputProperty ?? 'payload';
     this.presets = config.presets ?? [];
+    this.outputAsJsonata = config.outputAsJsonata === true;
+    this.outputJsonata = config.outputJsonata ?? '$value';
     // Prefer the persisted slider position; fall back to the configured default.
     this.currentValue = clamp(
       config.currentValue ?? config.defaultValue ?? this.minValue,
