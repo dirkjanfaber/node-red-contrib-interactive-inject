@@ -51,7 +51,7 @@
     "@types/node-red": "^1.3.4",
     "html-minifier-terser": "^7.2.0",
     "jest": "^30.4.2",
-    "node-red": "^4.1.10",
+    "node-red": "^5.0.1",
     "node-red-node-test-helper": "^0.3.4",
     "ts-jest": "^29.1.4",
     "typescript": "^6.0.3"
