@@ -508,6 +508,8 @@
         injectOnRelease: { value: true },
         autoCollapse:    { value: false },
         presets:         { value: [] },
+        outputAsJsonata: { value: false },
+        outputJsonata:   { value: '$value' },
       },
       inputs: 0,
       outputs: 1,
@@ -595,6 +597,17 @@
         $("input[name='nri-slider-behaviour'][value='" + behaviour + "']").prop("checked", true);
         $("#node-input-autoCollapse").prop("checked", this.autoCollapse === true);
 
+        $("#node-input-outputJsonata").typedInput({ types: ["jsonata"] });
+        $("#node-input-outputJsonata").typedInput("value", this.outputJsonata || "$value");
+        var outputMode = this.outputAsJsonata ? "jsonata" : "raw";
+        $("input[name='nri-slider-output-mode'][value='" + outputMode + "']").prop("checked", true);
+        function updateOutputModeVisibility() {
+          var jsonataSelected = $("input[name='nri-slider-output-mode']:checked").val() === "jsonata";
+          $("#nri-slider-jsonata-row, #nri-slider-jsonata-hint-row").toggle(jsonataSelected);
+        }
+        $("input[name='nri-slider-output-mode']").on("change", updateOutputModeVisibility);
+        updateOutputModeVisibility();
+
         $("#node-input-presets-list").editableList({
           addItem: function (container, i, data) {
             var row = $("<div>").css({ display: "flex", gap: "0", alignItems: "center", width: "100%" });
@@ -676,6 +689,8 @@
         this.sliderBehaviour = $("input[name='nri-slider-behaviour']:checked").val() || "release";
         this.autoCollapse    = $("#node-input-autoCollapse").is(":checked");
         this.currentValue    = this.defaultValue;
+        this.outputAsJsonata = $("input[name='nri-slider-output-mode']:checked").val() === "jsonata";
+        this.outputJsonata   = $("#node-input-outputJsonata").typedInput("value") || "$value";
 
         var presets = [];
         $("#node-input-presets-list").editableList("items").each(function () {
@@ -754,6 +769,20 @@
         <label><input type="radio" name="nri-slider-behaviour" value="none">never (button only)</label>
       </div>
     </div>
+    <div class="form-row nri-send-row">
+      <label><i class="fa fa-code"></i> Output</label>
+      <div class="nri-radio-group">
+        <label><input type="radio" name="nri-slider-output-mode" value="raw">raw value</label>
+        <label><input type="radio" name="nri-slider-output-mode" value="jsonata">JSONata expression</label>
+      </div>
+    </div>
+    <div class="form-row" id="nri-slider-jsonata-row">
+      <label for="node-input-outputJsonata">&nbsp;</label>
+      <input type="text" id="node-input-outputJsonata" style="width:70%">
+    </div>
+    <div class="form-row" id="nri-slider-jsonata-hint-row">
+      <span class="nri-hint">The slider value is available as <code>$value</code>. The result is written to the <em>Property</em> field above.</span>
+    </div>
   </div>
 
   <div id="nri-presets-section">
@@ -776,7 +805,7 @@
   <h3>Modes</h3>
   <dl class="message-properties">
     <dt>Slider</dt>
-    <dd>Drag the range slider or type a value directly to pick a number. The <em>Send</em> option controls when injection happens: <strong>on release</strong> injects once when you let go (or press <strong>Enter</strong>); <strong>while dragging</strong> injects continuously as the value changes during drag (and on Enter); <strong>never</strong> disables automatic injection so only the left-side button triggers it. Press <strong>Escape</strong> to cancel a typed edit.</dd>
+    <dd>Drag the range slider or type a value directly to pick a number. The <em>Send</em> option controls when injection happens: <strong>on release</strong> injects once when you let go (or press <strong>Enter</strong>); <strong>while dragging</strong> injects continuously as the value changes during drag (and on Enter); <strong>never</strong> disables automatic injection so only the left-side button triggers it. Press <strong>Escape</strong> to cancel a typed edit. The <em>Output</em> option controls what gets written to the <em>Property</em> field: <strong>raw value</strong> sends the plain number (default); <strong>JSONata expression</strong> evaluates a JSONata expression with the slider value bound to <code>$value</code>, letting you shape the payload — e.g. <code>{ "/Soc": $value }</code>.</dd>
     <dt>Preset buttons</dt>
     <dd>Each button is configured with a label and a typed value (string, number, boolean, JSON, JSONata, …). Hovering a button previews its value; clicking injects it. If a label is left blank it defaults to the value string.</dd>
   </dl>
