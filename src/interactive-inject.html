@@ -688,7 +688,13 @@
         );
         this.sliderBehaviour = $("input[name='nri-slider-behaviour']:checked").val() || "release";
         this.autoCollapse    = $("#node-input-autoCollapse").is(":checked");
-        this.currentValue    = this.defaultValue;
+        // Preserve the live slider position across edits — only fall back to
+        // defaultValue for a node that has never had a value (new node), and
+        // re-clamp in case min/max changed while editing.
+        var priorValue = (typeof this.currentValue === "number" && !isNaN(this.currentValue))
+          ? this.currentValue
+          : this.defaultValue;
+        this.currentValue    = Math.min(Math.max(priorValue, this.minValue), this.maxValue);
         this.outputAsJsonata = $("input[name='nri-slider-output-mode']:checked").val() === "jsonata";
         this.outputJsonata   = $("#node-input-outputJsonata").typedInput("value") || "$value";
 
