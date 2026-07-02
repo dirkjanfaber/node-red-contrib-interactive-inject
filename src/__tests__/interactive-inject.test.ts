@@ -503,6 +503,24 @@ describe('interactive-inject node', () => {
       const msg = await msgPromise;
       expect(msg.payload).toBe(33);
     });
+
+    it('POST /inject returns 400 when outputAsJsonata is enabled with a blank expression, instead of silently sending the raw value', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({
+        currentValue: 10,
+        outputAsJsonata: true,
+        outputJsonata: '',
+      }));
+      const n2 = helper.getNode('n2');
+      const inputSpy = jest.fn();
+      n2.on('input', inputSpy);
+
+      await helper.request()
+        .post('/interactive-inject/n1/inject')
+        .send({})
+        .expect(400);
+
+      expect(inputSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('sliderBehaviour config', () => {

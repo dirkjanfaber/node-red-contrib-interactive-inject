@@ -83,7 +83,7 @@ function interactiveInjectModule(RED: NodeAPI): void {
       }
       const msg: Record<string, unknown> = { topic: node.topic };
 
-      if (node.mode === 'slider' && node.outputAsJsonata && node.outputJsonata) {
+      if (node.mode === 'slider' && node.outputAsJsonata) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let expr: any;
         try {
