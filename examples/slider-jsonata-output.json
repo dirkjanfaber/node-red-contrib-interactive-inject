@@ -1,0 +1,54 @@
+[
+  {
+    "id": "tab-nri-jsonata-example",
+    "type": "tab",
+    "label": "Interactive Inject — Slider JSONata Output",
+    "disabled": false,
+    "info": "Demonstrates the slider's built-in Output: JSONata expression option.\n\nMove the slider and release — the value is bound to $value inside the configured JSONata expression and the result is written directly to msg.payload, with no downstream Change node needed."
+  },
+  {
+    "id": "nri-jsonata-comment",
+    "type": "comment",
+    "z": "tab-nri-jsonata-example",
+    "name": "Drag the slider, then release to inject. Output is set to a JSONata expression: { \"/Temperature\": $value }",
+    "info": "",
+    "x": 360,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "nri-jsonata-slider",
+    "type": "interactive-inject",
+    "z": "tab-nri-jsonata-example",
+    "name": "Temperature",
+    "label": "inject",
+    "minValue": 0,
+    "maxValue": 40,
+    "step": 0.5,
+    "defaultValue": 20,
+    "currentValue": 20,
+    "sliderBehaviour": "release",
+    "outputAsJsonata": true,
+    "outputJsonata": "{ \"/Temperature\": $value }",
+    "x": 170,
+    "y": 160,
+    "wires": [["nri-jsonata-debug"]]
+  },
+  {
+    "id": "nri-jsonata-debug",
+    "type": "debug",
+    "z": "tab-nri-jsonata-example",
+    "name": "",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 400,
+    "y": 160,
+    "wires": []
+  }
+]

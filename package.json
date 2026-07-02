@@ -29,6 +29,7 @@
     "buttons",
     "interactive",
     "canvas",
+    "jsonata",
     "victron"
   ],
   "repository": {
