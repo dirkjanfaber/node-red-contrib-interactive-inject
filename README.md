@@ -14,6 +14,7 @@ A Node-RED node that renders an interactive widget **directly on the editor canv
 - **Node status indicator** — last injected value shown below the node after each injection
 - **Auto-label presets** — if a preset label is left blank, the value string is used as the label automatically
 - **Configurable send behaviour** (slider mode) — choose between injecting *on release*, *while dragging* (fires on every value change during drag), or *never* (button only)
+- **JSONata output** (slider mode) — optionally shape the injected message with a JSONata expression; the slider's live value is available as `$value`
 - **Auto-collapse** — optional: widget collapses to normal node height after 3 s of inactivity, expands on hover
 - Left-side inject button for manual triggering, like the built-in Inject node
 - Last value/selection persisted to `flows.json` — survives deploy and restart
@@ -39,6 +40,7 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 
 - Drag the slider thumb to your desired value, or click the number display and type a value directly.
 - The **Send** option controls when injection happens: *on release* (default) injects once when you let go or press **Enter**; *while dragging* injects continuously as the value changes during a drag (and on **Enter**); *never* disables automatic injection so only the left-side button triggers it.
+- The **Output** option controls what gets written to the **Property** field: *raw value* (default) sends the plain number; *JSONata expression* evaluates an expression with the slider value bound to `$value`, letting you shape the payload — e.g. `{ "/Soc": $value }`.
 - Click the button on the left side of the node to inject the current value manually at any time.
 
 **Preset buttons mode**
@@ -75,6 +77,8 @@ Or via the Node-RED palette manager: search for **interactive-inject**.
 | Step | `1` | Increment between positions (decimals supported, e.g. `0.1`) |
 | Default | `50` | Value on first load |
 | Send | `on release` | When to inject: *on release* — once when the thumb is released or Enter pressed; *while dragging* — on every value change during drag (and on Enter); *never* — button only |
+| Output | `raw value` | *raw value* sends the plain number to the **Property** field; *JSONata expression* evaluates the expression below with the slider value bound to `$value` and writes the result to **Property** instead |
+| Expr | `$value` | *(Output: JSONata expression only)* The JSONata expression to evaluate, e.g. `{ "/Soc": $value }` |
 
 ### Preset buttons mode
 
@@ -115,20 +119,22 @@ Here the execution time is computed at the moment the button is pressed, so it a
 
 ## Wrapping the value in a JSON object
 
-To output `{ "/Temperature": 25 }` instead of a plain number, add a **Change** node after this one:
+To output `{ "/Temperature": 25 }` instead of a plain number, set the slider's **Output** option to *JSONata expression* and enter:
 
-- Action: **Set**
-- Target: `msg.payload`
-- Type: **J: expression**
-- Value: `{"/Temperature": payload}`
+```jsonata
+{ "/Temperature": $value }
+```
 
-The JSONata expression reads the incoming numeric `msg.payload` and builds the object. A ready-made example of this pattern is included — see **Import → Examples → node-red-contrib-interactive-inject → basic-usage** in the Node-RED editor.
+`$value` is bound to the slider's current value at the moment of injection — no downstream Change node required. See **Import → Examples → node-red-contrib-interactive-inject → slider-jsonata-output** in the Node-RED editor for a ready-made example.
+
+If you're on an older version without the built-in **Output** option, the same result can be achieved with a separate **Change** node after this one (Action: **Set**, Target: `msg.payload`, Type: **J: expression**, Value: `{"/Temperature": payload}`) — see the `basic-usage` example below.
 
 Additional examples are available under the same import path:
 
 | Example | Description |
 |---|---|
-| `basic-usage` | Slider with a Change node that wraps the value in a JSON key |
+| `slider-jsonata-output` | Slider using the built-in **Output: JSONata expression** option to wrap the value in a JSON key |
+| `basic-usage` | Slider with a separate Change node that wraps the value in a JSON key (pre-1.2.1 approach) |
 | `preset-buttons` | Preset buttons mode with string, number, boolean, and JSON value types |
 | `preset-jsonata-label` | Preset buttons with JSONata expressions that reference the button label via `label` |
 
