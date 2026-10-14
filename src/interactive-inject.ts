@@ -51,9 +51,14 @@ function reportError(
   err: unknown,
   statusText = 'JSONata error'
 ): void {
+  // JSONata errors are plain objects ({ code, position, token, message }),
+  // not Error instances, so String(err) would give "[object Object]".
+  const message = (typeof err === 'object' && err !== null && typeof (err as { message?: unknown }).message === 'string')
+    ? (err as { message: string }).message
+    : String(err);
   node.status({ fill: 'red', shape: 'ring', text: statusText });
-  node.error(err);
-  res.status(400).send(String(err));
+  node.error(message);
+  res.status(400).send(message);
 }
 
 function interactiveInjectModule(RED: NodeAPI): void {

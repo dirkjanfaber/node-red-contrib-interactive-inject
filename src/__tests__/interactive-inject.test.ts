@@ -622,8 +622,10 @@ describe('interactive-inject node', () => {
       const n1 = helper.getNode('n1') as any;
       const errorSpy = jest.spyOn(n1, 'error');
       const statusSpy = jest.spyOn(n1, 'status');
-      await helper.request().post('/interactive-inject/n1/inject').send({}).expect(400);
-      expect(errorSpy).toHaveBeenCalled();
+      const res = await helper.request().post('/interactive-inject/n1/inject').send({}).expect(400);
+      expect(res.text).not.toContain('[object Object]');
+      expect(res.text.length).toBeGreaterThan(0);
+      expect(errorSpy).toHaveBeenCalledWith(expect.not.stringContaining('[object Object]'));
       expect(statusSpy).toHaveBeenCalledWith(expect.objectContaining({ fill: 'red' }));
     });
 
@@ -643,8 +645,9 @@ describe('interactive-inject node', () => {
       const n2 = helper.getNode('n2');
       const inputSpy = jest.fn();
       n2.on('input', inputSpy);
-      await helper.request().post('/interactive-inject/n1/preset').send({ index: 0 }).expect(400);
-      expect(errorSpy).toHaveBeenCalled();
+      const res = await helper.request().post('/interactive-inject/n1/preset').send({ index: 0 }).expect(400);
+      expect(res.text).not.toContain('[object Object]');
+      expect(errorSpy).toHaveBeenCalledWith(expect.not.stringContaining('[object Object]'));
       expect(statusSpy).toHaveBeenCalledWith(expect.objectContaining({ fill: 'red' }));
       expect(inputSpy).not.toHaveBeenCalled();
     });
