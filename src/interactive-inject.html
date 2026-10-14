@@ -24,6 +24,30 @@
 
     var SLIDER_H = 56;
 
+    // Stop everything that keeps a reference to a node's SVG element alive.
+    // Called when Node-RED removes the element (node deleted, or its flow tab
+    // switched away — viewAddNode re-renders it when the tab comes back).
+    function teardown(el) {
+      if (el.__statusObs__)   { el.__statusObs__.disconnect(); el.__statusObs__ = null; }
+      if (el.__statusInt__)   { clearInterval(el.__statusInt__); el.__statusInt__ = null; }
+      if (el.__nriColTimer__) { clearTimeout(el.__nriColTimer__); el.__nriColTimer__ = null; }
+    }
+
+    // Report a failed request to the runtime. A 404 means the node exists in the
+    // editor but has not been deployed yet. With throttle set, repeated failures
+    // for the same node (e.g. while dragging) produce one notification per 3 s.
+    var lastErrorNotify = {};
+    function notifyRequestError(node, jqXHR, throttle) {
+      var now = Date.now();
+      if (throttle && now - (lastErrorNotify[node.id] || 0) < 3000) { return; }
+      lastErrorNotify[node.id] = now;
+      var text = jqXHR.status === 404
+        ? "node not deployed"
+        : (jqXHR.responseText || "error");
+      var displayLabel = node.name || node.label || "interactive inject";
+      RED.notify($("<div>").text(displayLabel + ": " + text).html(), { type: "error", timeout: 3000 });
+    }
+
     // Reposition node.status below the widget foreignObject.
     // The status group is NOT always inside evt.el — in Node-RED 4.x it lives in
     // the SVG group that D3 selects by node.id. We search both locations and
@@ -52,7 +76,11 @@
       fix();
       el.__statusObs__ = new MutationObserver(fix);
       el.__statusObs__.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["transform", "style"] });
-      el.__statusInt__ = setInterval(fix, 500);
+      el.__statusInt__ = setInterval(function () {
+        // Safety net in case viewRemoveNode was not triggered for this element
+        if (!el.isConnected) { teardown(el); return; }
+        fix();
+      }, 500);
     }
 
     // Always update style content so upgrades are reflected without a hard refresh
@@ -199,6 +227,9 @@
             type: "POST",
             contentType: "application/json",
             data: JSON.stringify({ value: v }),
+            // Errors are deliberately ignored: on an undeployed node the value
+            // is kept in the editor and deployed with the flow. Injecting
+            // (below) is what reports "node not deployed".
           });
         }, 150);
       }
@@ -247,6 +278,7 @@
           type: "POST",
           contentType: "application/json",
           data: JSON.stringify({ value: v }),
+          error: function (jqXHR) { notifyRequestError(node, jqXHR, true); },
         });
       }
 
@@ -458,6 +490,7 @@
                 type: "POST",
                 contentType: "application/json",
                 data: JSON.stringify({ index: idx }),
+                error: function (jqXHR) { notifyRequestError(node, jqXHR, true); },
               });
             };
           })(i));
@@ -541,12 +574,7 @@
                   { type: "success", timeout: 1500 }
                 );
               },
-              error: function (jqXHR) {
-                RED.notify(
-                  displayLabel + ": " + (jqXHR.responseText || "error"),
-                  { type: "error", timeout: 3000 }
-                );
-              },
+              error: function (jqXHR) { notifyRequestError(node, jqXHR, false); },
             });
             return;
           }
@@ -559,12 +587,7 @@
                 { type: "success", timeout: 1500 }
               );
             },
-            error: function (jqXHR) {
-              RED.notify(
-                displayLabel + ": " + (jqXHR.responseText || "error"),
-                { type: "error", timeout: 3000 }
-              );
-            },
+            error: function (jqXHR) { notifyRequestError(node, jqXHR, false); },
           });
         },
       },
@@ -722,6 +745,9 @@
 
     RED.hooks.add("viewRedrawNode.interactive-inject", onNodeDraw);
     RED.hooks.add("viewAddNode.interactive-inject", onNodeDraw);
+    RED.hooks.add("viewRemoveNode.interactive-inject", function (evt) {
+      if (evt.node.type === "interactive-inject") { teardown(evt.el); }
+    });
 
   })();
 </script>

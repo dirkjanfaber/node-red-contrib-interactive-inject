@@ -43,6 +43,19 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+// Surface an evaluation error to the editor (red status), the debug sidebar /
+// Catch nodes (node.error) and the HTTP caller (400).
+function reportError(
+  node: InteractiveInjectNode,
+  res: { status(code: number): { send(body: string): unknown } },
+  err: unknown,
+  statusText = 'JSONata error'
+): void {
+  node.status({ fill: 'red', shape: 'ring', text: statusText });
+  node.error(err);
+  res.status(400).send(String(err));
+}
+
 function interactiveInjectModule(RED: NodeAPI): void {
   // Admin HTTP endpoints called by the canvas slider/button
   RED.httpAdmin.post(
@@ -90,15 +103,13 @@ function interactiveInjectModule(RED: NodeAPI): void {
           expr = (RED.util as any).prepareJSONataExpression(node.outputJsonata, node);
           expr.assign('value', node.currentValue);
         } catch (err) {
-          node.status({ fill: 'red', shape: 'ring', text: 'JSONata error' });
-          res.status(400).send(String(err));
+          reportError(node, res, err);
           return;
         }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (RED.util as any).evaluateJSONataExpression(expr, msg, (err: Error | null, result: unknown) => {
           if (err) {
-            node.status({ fill: 'red', shape: 'ring', text: 'JSONata error' });
-            res.status(400).send(String(err));
+            reportError(node, res, err);
             return;
           }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -143,29 +154,35 @@ function interactiveInjectModule(RED: NodeAPI): void {
         valueType === 'global' ? 'global.' + rawValue :
         rawValue
       );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (RED.util as any).evaluateNodeProperty(rawValue, valueType, node, { label: effectiveLabel }, (err: Error | null, result: unknown) => {
-        if (err) { res.status(500).send(String(err)); return; }
-        let msg: Record<string, unknown>;
-        if (preset.fullMsg && typeof result === 'object' && result !== null) {
-          msg = result as Record<string, unknown>;
-        } else {
-          msg = { topic: node.topic, label: effectiveLabel };
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (RED.util as any).setMessageProperty(msg, node.outputProperty, result);
-        }
-        node.send(msg);
-        let displayVal: string;
-        if (valueType === 'flow') {
-          displayVal = 'flow.' + rawValue;
-        } else if (valueType === 'global') {
-          displayVal = 'global.' + rawValue;
-        } else {
-          displayVal = typeof result === 'object' ? JSON.stringify(result) : String(result);
-        }
-        node.status({ fill: 'green', shape: 'dot', text: effectiveLabel + ': ' + displayVal.slice(0, 30) });
-        res.json({ label: preset.label, value: result });
-      });
+      // evaluateNodeProperty throws synchronously for an unparseable JSONata
+      // expression, and reports runtime evaluation errors via the callback.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (RED.util as any).evaluateNodeProperty(rawValue, valueType, node, { label: effectiveLabel }, (err: Error | null, result: unknown) => {
+          if (err) { reportError(node, res, err, 'evaluation error'); return; }
+          let msg: Record<string, unknown>;
+          if (preset.fullMsg && typeof result === 'object' && result !== null) {
+            msg = result as Record<string, unknown>;
+          } else {
+            msg = { topic: node.topic, label: effectiveLabel };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (RED.util as any).setMessageProperty(msg, node.outputProperty, result);
+          }
+          node.send(msg);
+          let displayVal: string;
+          if (valueType === 'flow') {
+            displayVal = 'flow.' + rawValue;
+          } else if (valueType === 'global') {
+            displayVal = 'global.' + rawValue;
+          } else {
+            displayVal = typeof result === 'object' ? JSON.stringify(result) : String(result);
+          }
+          node.status({ fill: 'green', shape: 'dot', text: effectiveLabel + ': ' + displayVal.slice(0, 30) });
+          res.json({ label: effectiveLabel, value: result });
+        });
+      } catch (err) {
+        if (!res.headersSent) { reportError(node, res, err, 'evaluation error'); }
+      }
     }
   );
 

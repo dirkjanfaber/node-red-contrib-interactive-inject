@@ -596,6 +596,60 @@ describe('interactive-inject node', () => {
     });
   });
 
+  describe('error reporting', () => {
+    it('POST /preset returns the auto-generated label when the preset label is blank', async () => {
+      await helper.load(interactiveInjectNode, [
+        {
+          id: 'n1', type: 'interactive-inject', mode: 'presets', topic: '',
+          presets: [{ label: '', value: '42', valueType: 'num' }],
+          wires: [['n2']],
+        },
+        { id: 'n2', type: 'helper' },
+      ]);
+      const res = await helper.request()
+        .post('/interactive-inject/n1/preset')
+        .send({ index: 0 })
+        .expect(200);
+      expect(res.body.label).toBe('42');
+    });
+
+    it('POST /inject reports a JSONata error via node.error and a red status', async () => {
+      await helper.load(interactiveInjectNode, BASE_FLOW({
+        outputAsJsonata: true,
+        outputJsonata: '{ invalid jsonata !!',
+      }));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const n1 = helper.getNode('n1') as any;
+      const errorSpy = jest.spyOn(n1, 'error');
+      const statusSpy = jest.spyOn(n1, 'status');
+      await helper.request().post('/interactive-inject/n1/inject').send({}).expect(400);
+      expect(errorSpy).toHaveBeenCalled();
+      expect(statusSpy).toHaveBeenCalledWith(expect.objectContaining({ fill: 'red' }));
+    });
+
+    it('POST /preset returns 400 for an invalid JSONata preset and reports it via node.error and a red status', async () => {
+      await helper.load(interactiveInjectNode, [
+        {
+          id: 'n1', type: 'interactive-inject', mode: 'presets', topic: '',
+          presets: [{ label: 'Bad', value: '{ invalid jsonata !!', valueType: 'jsonata' }],
+          wires: [['n2']],
+        },
+        { id: 'n2', type: 'helper' },
+      ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const n1 = helper.getNode('n1') as any;
+      const errorSpy = jest.spyOn(n1, 'error');
+      const statusSpy = jest.spyOn(n1, 'status');
+      const n2 = helper.getNode('n2');
+      const inputSpy = jest.fn();
+      n2.on('input', inputSpy);
+      await helper.request().post('/interactive-inject/n1/preset').send({ index: 0 }).expect(400);
+      expect(errorSpy).toHaveBeenCalled();
+      expect(statusSpy).toHaveBeenCalledWith(expect.objectContaining({ fill: 'red' }));
+      expect(inputSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('full message output for presets', () => {
     it('POST /preset with fullMsg sends entire evaluated object as the message', async () => {
       const flow = [

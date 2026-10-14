@@ -15,7 +15,8 @@ declare module 'node-red-node-test-helper' {
 
   interface SuperTestRequest {
     send(body: Record<string, unknown>): SuperTestRequest;
-    expect(status: number): Promise<void>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(status: number): Promise<{ body: any; text: string }>;
     then(resolve: (res: { body: unknown }) => void): Promise<void>;
   }
 
